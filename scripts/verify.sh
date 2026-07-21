@@ -98,6 +98,7 @@ ruby -e 'require "yaml"; YAML.load_file(ARGV.fetch(0))' "$WORKFLOW"
 grep -q '^  push:' "$WORKFLOW"
 grep -q '^  workflow_dispatch:' "$WORKFLOW"
 grep -q '^  contents: write$' "$WORKFLOW"
+grep -q 'runs-on: macos-26' "$WORKFLOW"
 grep -q 'VERSION="0.1.${GITHUB_RUN_NUMBER}"' "$WORKFLOW"
 grep -q 'uses: actions/checkout@v6' "$WORKFLOW"
 for asset in RuntimeAtlas.zip RuntimeAtlas.pkg 'RuntimeAtlas-${VERSION}.zip' 'RuntimeAtlas-${VERSION}.pkg'; do
