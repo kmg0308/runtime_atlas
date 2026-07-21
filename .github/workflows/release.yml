@@ -1,0 +1,59 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: runtime-atlas-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-release:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          swift --version
+
+      - name: Build and verify app, CLI, ZIP, and PKG
+        run: |
+          VERSION="0.1.${GITHUB_RUN_NUMBER}"
+          BUILD_COMMIT="${GITHUB_SHA:0:7}"
+          VERSION="$VERSION" BUILD_NUMBER="$GITHUB_RUN_NUMBER" BUILD_COMMIT="$BUILD_COMMIT" ./scripts/verify.sh
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="0.1.${GITHUB_RUN_NUMBER}"
+          TAG="v${VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              "dist/RuntimeAtlas.zip" \
+              "dist/RuntimeAtlas.pkg" \
+              "dist/RuntimeAtlas-${VERSION}.zip" \
+              "dist/RuntimeAtlas-${VERSION}.pkg" \
+              "dist/manifest.json" \
+              --clobber
+          else
+            gh release create "$TAG" \
+              "dist/RuntimeAtlas.zip" \
+              "dist/RuntimeAtlas.pkg" \
+              "dist/RuntimeAtlas-${VERSION}.zip" \
+              "dist/RuntimeAtlas-${VERSION}.pkg" \
+              "dist/manifest.json" \
+              --target "$GITHUB_SHA" \
+              --title "Runtime Atlas ${VERSION}" \
+              --notes "Automated Runtime Atlas build from main commit ${GITHUB_SHA}. Ad-hoc signed; not notarized." \
+              --latest
+          fi
