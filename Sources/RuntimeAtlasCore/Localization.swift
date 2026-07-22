@@ -172,6 +172,9 @@ public struct AtlasCopy: Sendable {
     public var exactCommand: String { value(english: "Exact command", korean: "실제 실행 명령") }
     public var actionSaved: String { value(english: "Command saved.", korean: "명령어를 저장했습니다.") }
     public var actionSaveFailed: String { value(english: "Command could not be saved.", korean: "명령어를 저장하지 못했습니다.") }
+    public var worktreeOrderSaveFailed: String {
+        value(english: "Working folder order could not be saved.", korean: "작업 폴더 순서를 저장하지 못했습니다.")
+    }
     public var actionRemoveFailed: String { value(english: "Command could not be removed.", korean: "명령어를 제거하지 못했습니다.") }
     public var actionLaunchFailed: String { value(english: "Command could not be started.", korean: "명령어를 시작하지 못했습니다.") }
     public var deleteAction: String { value(english: "Delete Command", korean: "명령어 삭제") }

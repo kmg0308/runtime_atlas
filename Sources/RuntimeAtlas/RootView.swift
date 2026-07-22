@@ -237,6 +237,18 @@ private struct RepositorySidebarSection: View {
                             selected: worktree.path == model.selectedWorktreePath,
                             action: { model.select(worktree: worktree) }
                         )
+                        .draggable(dragValue(for: worktree))
+                        .dropDestination(for: String.self) { values, location in
+                            guard let value = values.first,
+                                  let draggedPath = draggedPath(from: value) else { return false }
+                            model.moveWorktree(
+                                in: repository,
+                                draggedPath: draggedPath,
+                                targetPath: worktree.path,
+                                placeAfterTarget: location.y > 28
+                            )
+                            return true
+                        }
                     }
                 }
                 .padding(.horizontal, 7)
@@ -247,6 +259,16 @@ private struct RepositorySidebarSection: View {
             .environmentObject(model)
             .environment(\.atlasCopy, copy)
         }
+    }
+
+    private func dragValue(for worktree: WorktreeStatus) -> String {
+        "runtime-atlas-worktree:\(worktree.path)"
+    }
+
+    private func draggedPath(from value: String) -> String? {
+        let prefix = "runtime-atlas-worktree:"
+        guard value.hasPrefix(prefix) else { return nil }
+        return String(value.dropFirst(prefix.count))
     }
 }
 

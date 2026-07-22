@@ -978,6 +978,7 @@ suite.run("Custom action configuration is backward compatible and atomic") {
     let store = ConfigurationStore(paths: paths, repositoryRootResolver: { $0 })
     let loaded = try store.load().value
     try suite.equal(loaded.customActions, [], "legacy configuration should decode without actions")
+    try suite.equal(loaded.worktreeOrderByRepository, [:], "legacy configuration should decode without a saved worktree order")
 
     let repositoryID = try store.addRepository(path: "/tmp/action-repository")
     let action = CustomActionDefinition(
@@ -990,8 +991,31 @@ suite.run("Custom action configuration is backward compatible and atomic") {
     let saved = try store.load().value
     try suite.equal(saved.schemaVersion, 2, "saving an action should upgrade configuration schema")
     try suite.equal(saved.customActions, [action], "action should round-trip")
+    try suite.equal(
+        WorktreeOrderIdentity.key(branch: "feature/one", detached: false, sha: "abc"),
+        "branch:feature/one",
+        "branch identity should remain portable across local paths"
+    )
+    try suite.equal(
+        WorktreeOrderIdentity.key(branch: nil, detached: true, sha: "abc123"),
+        "detached:abc123",
+        "detached worktrees should fall back to their SHA"
+    )
+    try store.setWorktreeOrder(
+        repositoryID: repositoryID,
+        orderedKeys: ["branch:feature", "branch:main", "branch:feature"]
+    )
+    let reordered = try store.load().value
+    try suite.equal(reordered.schemaVersion, 3, "saving worktree order should upgrade configuration schema")
+    try suite.equal(
+        reordered.worktreeOrderByRepository[repositoryID.uuidString],
+        ["branch:feature", "branch:main"],
+        "saved order should be stable and deduplicated"
+    )
     try store.removeRepository(id: repositoryID)
-    try suite.equal(try store.load().value.customActions, [], "removing a repository should remove its action definitions")
+    let removed = try store.load().value
+    try suite.equal(removed.customActions, [], "removing a repository should remove its action definitions")
+    try suite.equal(removed.worktreeOrderByRepository, [:], "removing a repository should remove its saved worktree order")
 }
 
 suite.run("Command sessions persist atomically and require supervisor identity") {

@@ -309,6 +309,7 @@ public struct ConfigurationStore: Sendable {
                 .map { PathUtilities.canonical($0.path) }
             configuration.repositories.removeAll { $0.id == id }
             configuration.customActions.removeAll { $0.repositoryID == id }
+            configuration.worktreeOrderByRepository.removeValue(forKey: id.uuidString)
             configuration.databaseLabels = configuration.databaseLabels.filter { path, _ in
                 let canonicalPath = PathUtilities.canonical(path)
                 if canonicalWorktrees.contains(canonicalPath) { return false }
@@ -334,6 +335,19 @@ public struct ConfigurationStore: Sendable {
     public func setAppLanguage(_ language: AppLanguage) throws {
         try file.update { configuration in
             configuration.appLanguage = language
+        }
+    }
+
+    public func setWorktreeOrder(repositoryID: UUID, orderedKeys: [String]) throws {
+        let uniqueKeys = orderedKeys.reduce(into: [String]()) { result, key in
+            if !result.contains(key) { result.append(key) }
+        }
+        try file.update { configuration in
+            guard configuration.repositories.contains(where: { $0.id == repositoryID }) else {
+                throw CustomActionError.invalidInput("repository is no longer registered")
+            }
+            configuration.schemaVersion = max(configuration.schemaVersion, 3)
+            configuration.worktreeOrderByRepository[repositoryID.uuidString] = uniqueKeys
         }
     }
 

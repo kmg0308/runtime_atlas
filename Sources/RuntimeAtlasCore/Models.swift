@@ -70,23 +70,26 @@ public struct RuntimeAtlasConfiguration: Codable, Equatable, Sendable {
     public var databaseLabels: [String: String]
     public var appLanguage: AppLanguage?
     public var customActions: [CustomActionDefinition]
+    public var worktreeOrderByRepository: [String: [String]]
 
     public init(
         schemaVersion: Int = 2,
         repositories: [RepositoryRegistration] = [],
         databaseLabels: [String: String] = [:],
         appLanguage: AppLanguage? = nil,
-        customActions: [CustomActionDefinition] = []
+        customActions: [CustomActionDefinition] = [],
+        worktreeOrderByRepository: [String: [String]] = [:]
     ) {
         self.schemaVersion = schemaVersion
         self.repositories = repositories
         self.databaseLabels = databaseLabels
         self.appLanguage = appLanguage
         self.customActions = customActions
+        self.worktreeOrderByRepository = worktreeOrderByRepository
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, repositories, databaseLabels, appLanguage, customActions
+        case schemaVersion, repositories, databaseLabels, appLanguage, customActions, worktreeOrderByRepository
     }
 
     public init(from decoder: Decoder) throws {
@@ -96,6 +99,19 @@ public struct RuntimeAtlasConfiguration: Codable, Equatable, Sendable {
         databaseLabels = try container.decodeIfPresent([String: String].self, forKey: .databaseLabels) ?? [:]
         appLanguage = try container.decodeIfPresent(AppLanguage.self, forKey: .appLanguage)
         customActions = try container.decodeIfPresent([CustomActionDefinition].self, forKey: .customActions) ?? []
+        worktreeOrderByRepository = try container.decodeIfPresent(
+            [String: [String]].self,
+            forKey: .worktreeOrderByRepository
+        ) ?? [:]
+    }
+}
+
+public enum WorktreeOrderIdentity {
+    public static func key(branch: String?, detached: Bool, sha: String) -> String {
+        if !detached, let branch, !branch.isEmpty {
+            return "branch:\(branch)"
+        }
+        return "detached:\(sha)"
     }
 }
 

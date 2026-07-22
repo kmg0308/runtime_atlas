@@ -179,6 +179,31 @@ final class AtlasAppModel: ObservableObject {
         selectedWorktreePath = worktree.path
     }
 
+    func moveWorktree(
+        in repository: RepositoryStatus,
+        draggedPath: String,
+        targetPath: String,
+        placeAfterTarget: Bool
+    ) {
+        guard draggedPath != targetPath,
+              let dragged = repository.worktrees.first(where: { $0.path == draggedPath }) else { return }
+        var reordered = repository.worktrees.filter { $0.path != draggedPath }
+        guard let targetIndex = reordered.firstIndex(where: { $0.path == targetPath }) else { return }
+        reordered.insert(dragged, at: targetIndex + (placeAfterTarget ? 1 : 0))
+
+        do {
+            try configurationStore.setWorktreeOrder(
+                repositoryID: repository.id,
+                orderedKeys: reordered.map {
+                    WorktreeOrderIdentity.key(branch: $0.branch, detached: $0.detached, sha: $0.sha)
+                }
+            )
+            refresh()
+        } catch {
+            operationMessage = copy.worktreeOrderSaveFailed
+        }
+    }
+
     private func reconcileSelection(in status: AtlasStatus) {
         let paths = status.repositories.flatMap(\.worktrees).map(\.path)
         if let selectedWorktreePath, paths.contains(selectedWorktreePath) {

@@ -45,6 +45,8 @@ public struct StatusService: Sendable {
         let configuration = configurationLoad.value
         let repositories = configuration.repositories.map { registration in
             let inspected = gitInspector.inspectRepository(registration)
+            let preferredOrder = configuration.worktreeOrderByRepository[registration.id.uuidString] ?? []
+            let preferredRanks = Dictionary(uniqueKeysWithValues: preferredOrder.enumerated().map { ($1, $0) })
             let worktrees = inspected.worktrees
                 .map { worktree in
                     makeWorktreeStatus(
@@ -56,7 +58,14 @@ public struct StatusService: Sendable {
                         dockerDiscovery: dockerDiscovery
                     )
                 }
-                .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+                .sorted { lhs, rhs in
+                    let lhsKey = WorktreeOrderIdentity.key(branch: lhs.branch, detached: lhs.detached, sha: lhs.sha)
+                    let rhsKey = WorktreeOrderIdentity.key(branch: rhs.branch, detached: rhs.detached, sha: rhs.sha)
+                    let lhsRank = preferredRanks[lhsKey] ?? Int.max
+                    let rhsRank = preferredRanks[rhsKey] ?? Int.max
+                    if lhsRank != rhsRank { return lhsRank < rhsRank }
+                    return lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending
+                }
 
             return RepositoryStatus(
                 id: registration.id,
