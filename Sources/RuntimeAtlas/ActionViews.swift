@@ -14,20 +14,16 @@ struct CustomActionsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                if actions.isEmpty {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(copy.noActions).font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
-                        Text(copy.noActionsHelp).font(.system(size: RuntimeAtlasTheme.Typography.secondary)).foregroundStyle(RuntimeAtlasTheme.secondaryText)
-                    }
-                } else {
-                    Text(copy.sessionCloseNotice)
-                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
-                        .foregroundStyle(RuntimeAtlasTheme.secondaryText)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    actionsHelp
+                    Spacer(minLength: 8)
+                    configureButton
                 }
-                Spacer()
-                Button(copy.configureActions) { showingManager = true }
-                    .buttonStyle(AtlasButtonStyle())
+                VStack(alignment: .leading, spacing: 9) {
+                    actionsHelp
+                    configureButton
+                }
             }
 
             ForEach(actions) { action in actionRow(action) }
@@ -47,30 +43,18 @@ struct CustomActionsSection: View {
     @ViewBuilder private func actionRow(_ action: CustomActionDefinition) -> some View {
         let state = runner.state(for: action, worktreePath: worktree.path)
         VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: action.kind == .session ? "play.rectangle.fill" : "terminal.fill")
-                    .foregroundStyle(RuntimeAtlasTheme.accent).font(.system(size: 18))
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 7) {
-                        Text(action.name).font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
-                        if action.risk == .destructive {
-                            AtlasBadge(text: copy.destructiveAction, icon: "exclamationmark.triangle.fill", color: RuntimeAtlasTheme.amber)
-                        }
-                    }
-                    Text(action.commandTemplate)
-                        .font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
-                        .foregroundStyle(RuntimeAtlasTheme.secondaryText).lineLimit(2)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 12) {
+                    actionIdentity(action)
+                    Spacer(minLength: 8)
+                    actionControls(action, state: state)
                 }
-                Spacer()
-                Text(phaseText(state?.phase))
-                    .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .medium))
-                    .foregroundStyle(phaseColor(state?.phase))
-                if runner.isRunning(action, worktreePath: worktree.path) {
-                    Button(copy.stop) { runner.stop(action: action, worktreePath: worktree.path) }
-                        .buttonStyle(AtlasButtonStyle())
-                } else {
-                    Button(action.kind == .session ? copy.start : copy.run) { prepare(action) }
-                        .buttonStyle(AtlasButtonStyle(prominent: true))
+                VStack(alignment: .leading, spacing: 10) {
+                    actionIdentity(action)
+                    HStack(spacing: 8) {
+                        Spacer(minLength: 0)
+                        actionControls(action, state: state)
+                    }
                 }
             }
             if let state, !state.output.isEmpty {
@@ -85,6 +69,63 @@ struct CustomActionsSection: View {
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 6).fill(RuntimeAtlasTheme.control).overlay { RoundedRectangle(cornerRadius: 6).stroke(RuntimeAtlasTheme.border) })
         .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder private var actionsHelp: some View {
+        if actions.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(copy.noActions).font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
+                Text(copy.noActionsHelp).font(.system(size: RuntimeAtlasTheme.Typography.secondary)).foregroundStyle(RuntimeAtlasTheme.secondaryText)
+            }
+        } else {
+            Text(copy.sessionCloseNotice)
+                .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
+                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
+        }
+    }
+
+    private var configureButton: some View {
+        Button(copy.configureActions) { showingManager = true }
+            .buttonStyle(AtlasButtonStyle())
+    }
+
+    private func actionIdentity(_ action: CustomActionDefinition) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: action.kind == .session ? "play.rectangle.fill" : "terminal.fill")
+                .foregroundStyle(RuntimeAtlasTheme.accent).font(.system(size: 18))
+            VStack(alignment: .leading, spacing: 5) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 7) {
+                        Text(action.name).font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
+                        if action.risk == .destructive {
+                            AtlasBadge(text: copy.destructiveAction, icon: "exclamationmark.triangle.fill", color: RuntimeAtlasTheme.amber)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(action.name).font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
+                        if action.risk == .destructive {
+                            AtlasBadge(text: copy.destructiveAction, icon: "exclamationmark.triangle.fill", color: RuntimeAtlasTheme.amber)
+                        }
+                    }
+                }
+                Text(action.commandTemplate)
+                    .font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
+                    .foregroundStyle(RuntimeAtlasTheme.secondaryText).lineLimit(3)
+            }
+        }
+    }
+
+    @ViewBuilder private func actionControls(_ action: CustomActionDefinition, state: ActionRunState?) -> some View {
+        Text(phaseText(state?.phase))
+            .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .medium))
+            .foregroundStyle(phaseColor(state?.phase))
+        if runner.isRunning(action, worktreePath: worktree.path) {
+            Button(copy.stop) { runner.stop(action: action, worktreePath: worktree.path) }
+                .buttonStyle(AtlasButtonStyle())
+        } else {
+            Button(action.kind == .session ? copy.start : copy.run) { prepare(action) }
+                .buttonStyle(AtlasButtonStyle(prominent: true))
+        }
     }
 
     private func prepare(_ action: CustomActionDefinition) {
@@ -121,15 +162,16 @@ private struct ActionManagerView: View {
             ScrollView {
                 VStack(spacing: 10) {
                     ForEach(model.actions(for: repository.id)) { action in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(action.name).font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
-                                Text(action.commandTemplate).font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced)).foregroundStyle(RuntimeAtlasTheme.secondaryText)
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 10) {
+                                actionDescription(action)
+                                Spacer(minLength: 8)
+                                managerButtons(action)
                             }
-                            Spacer()
-                            Button(copy.editAction) { editing = action }.disabled(isRunning(action))
-                            Button(role: .destructive) { model.removeCustomAction(action) } label: { Image(systemName: "trash") }
-                                .help(copy.deleteAction).disabled(isRunning(action))
+                            VStack(alignment: .leading, spacing: 9) {
+                                actionDescription(action)
+                                HStack { Spacer(); managerButtons(action) }
+                            }
                         }.padding(12).background(RoundedRectangle(cornerRadius: 6).fill(RuntimeAtlasTheme.control))
                     }
                     Button { editing = CustomActionDefinition(repositoryID: repository.id, name: "", commandTemplate: "") } label: { Label(copy.addAction, systemImage: "plus") }
@@ -137,7 +179,7 @@ private struct ActionManagerView: View {
                 }.padding(20)
             }
         }
-        .frame(minWidth: 680, minHeight: 520)
+        .frame(minWidth: 520, minHeight: 480)
         .background(RuntimeAtlasTheme.background)
         .sheet(item: $editing) { action in
             ActionEditorView(action: action) { saved in if model.saveCustomAction(saved) { editing = nil } }
@@ -147,6 +189,19 @@ private struct ActionManagerView: View {
 
     private func isRunning(_ action: CustomActionDefinition) -> Bool {
         repository.worktrees.contains { runner.isRunning(action, worktreePath: $0.path) }
+    }
+
+    private func actionDescription(_ action: CustomActionDefinition) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(action.name).font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
+            Text(action.commandTemplate).font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced)).foregroundStyle(RuntimeAtlasTheme.secondaryText).lineLimit(3)
+        }
+    }
+
+    @ViewBuilder private func managerButtons(_ action: CustomActionDefinition) -> some View {
+        Button(copy.editAction) { editing = action }.disabled(isRunning(action))
+        Button(role: .destructive) { model.removeCustomAction(action) } label: { Image(systemName: "trash") }
+            .help(copy.deleteAction).disabled(isRunning(action))
     }
 }
 
@@ -181,7 +236,10 @@ private struct ActionEditorView: View {
                     HStack { Text(copy.inputs).font(.system(size: RuntimeAtlasTheme.Typography.sectionTitle, weight: .semibold)); Spacer(); Button(copy.addInput) { draft.inputs.append(CustomActionInputDefinition(key: "input\(draft.inputs.count + 1)", label: "", kind: .text)) } }
                     ForEach($draft.inputs) { $input in
                         VStack(alignment: .leading, spacing: 8) {
-                            HStack { TextField(copy.inputKey, text: $input.key); TextField(copy.inputLabel, text: $input.label); Button(role: .destructive) { draft.inputs.removeAll { $0.id == input.id } } label: { Image(systemName: "minus.circle") } }
+                            ViewThatFits(in: .horizontal) {
+                                HStack { inputFields(input: $input); removeInputButton(input.id) }
+                                VStack(alignment: .trailing, spacing: 8) { inputFields(input: $input); removeInputButton(input.id) }
+                            }
                             Picker("", selection: $input.kind) { Text(copy.textInput).tag(CustomActionInputKind.text); Text(copy.worktreeInput).tag(CustomActionInputKind.worktree); Text(copy.checkboxInput).tag(CustomActionInputKind.flag) }.pickerStyle(.segmented)
                             if input.kind == .flag { TextField("--flag", text: Binding(get: { input.flagArgument ?? "" }, set: { input.flagArgument = $0 })) }
                         }.padding(10).background(RoundedRectangle(cornerRadius: 6).fill(RuntimeAtlasTheme.control))
@@ -191,11 +249,18 @@ private struct ActionEditorView: View {
             }
             Divider()
             HStack { Spacer(); Button(copy.save) { save() }.buttonStyle(AtlasButtonStyle(prominent: true)) }.padding(16)
-        }.frame(minWidth: 700, minHeight: 680).background(RuntimeAtlasTheme.background)
+        }.frame(minWidth: 520, minHeight: 600).background(RuntimeAtlasTheme.background)
     }
 
     private func labeled<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 7) { Text(title).font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold)); content() }
+    }
+    @ViewBuilder private func inputFields(input: Binding<CustomActionInputDefinition>) -> some View {
+        TextField(copy.inputKey, text: input.key)
+        TextField(copy.inputLabel, text: input.label)
+    }
+    private func removeInputButton(_ id: UUID) -> some View {
+        Button(role: .destructive) { draft.inputs.removeAll { $0.id == id } } label: { Image(systemName: "minus.circle") }
     }
     private func save() {
         draft.effects = effectsText.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
@@ -235,7 +300,7 @@ private struct ActionExecutionView: View {
                 switch plan { case .success(let plan): Text(plan.displayCommand).font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced)).textSelection(.enabled); case .failure(let error): Text(copy.localizedCoreMessage(error.localizedDescription)).foregroundStyle(RuntimeAtlasTheme.red) }
             }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(RoundedRectangle(cornerRadius: 6).fill(RuntimeAtlasTheme.control))
             HStack { Spacer(); Button(action.kind == .session ? copy.start : copy.run) { execute() }.buttonStyle(AtlasButtonStyle(prominent: true)).disabled((try? plan.get()) == nil) }
-        }.padding(22).frame(minWidth: 620).background(RuntimeAtlasTheme.background)
+        }.padding(22).frame(minWidth: 480).background(RuntimeAtlasTheme.background)
     }
 
     @ViewBuilder private func inputView(_ input: CustomActionInputDefinition) -> some View {

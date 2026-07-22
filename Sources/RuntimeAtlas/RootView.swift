@@ -24,11 +24,11 @@ struct RootView: View {
             HSplitView {
                 SidebarView(repositoryToRemove: $repositoryToRemove)
                     .environmentObject(model)
-                    .frame(minWidth: 290, idealWidth: 330, maxWidth: 420)
+                    .frame(minWidth: 200, idealWidth: 260, maxWidth: 360)
 
                 DetailPane()
                     .environmentObject(model)
-                    .frame(minWidth: 760, maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .foregroundStyle(RuntimeAtlasTheme.primaryText)

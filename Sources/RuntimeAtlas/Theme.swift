@@ -32,7 +32,7 @@ enum RuntimeAtlasTheme {
     static let cardRadius: CGFloat = 8
     static let controlRadius: CGFloat = 6
     static let controlHeight: CGFloat = 36
-    static let minimumWindowWidth: CGFloat = 1_080
+    static let minimumWindowWidth: CGFloat = 640
     static let minimumWindowHeight: CGFloat = 720
 }
 

@@ -245,7 +245,9 @@ for path in pathlib.Path(sys.argv[1]).glob("*.swift"):
 if too_small:
     raise SystemExit("UI contains text smaller than 11pt: " + ", ".join(too_small))
 PY
-grep -Fq 'minimumWindowWidth: CGFloat = 1_080' "$ROOT_DIR/Sources/RuntimeAtlas/Theme.swift"
+grep -Fq 'minimumWindowWidth: CGFloat = 640' "$ROOT_DIR/Sources/RuntimeAtlas/Theme.swift"
+grep -Fq '.frame(minWidth: 200, idealWidth: 260, maxWidth: 360)' "$ROOT_DIR/Sources/RuntimeAtlas/RootView.swift"
+grep -Fq '.frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)' "$ROOT_DIR/Sources/RuntimeAtlas/RootView.swift"
 grep -Fq 'minimumWindowHeight: CGFloat = 720' "$ROOT_DIR/Sources/RuntimeAtlas/Theme.swift"
 
 echo "verify passed"

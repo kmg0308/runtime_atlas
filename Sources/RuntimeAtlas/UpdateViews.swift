@@ -6,6 +6,27 @@ struct UpdateAvailableBanner: View {
     @Environment(\.atlasCopy) private var copy
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                updateStatus
+                Spacer(minLength: 8)
+                updateControls
+            }
+            VStack(alignment: .leading, spacing: 9) {
+                updateStatus
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    updateControls
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .atlasSurface(elevated: true)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var updateStatus: some View {
         HStack(spacing: 12) {
             Image(systemName: "arrow.down.circle.fill")
                 .font(.system(size: 17, weight: .semibold))
@@ -17,31 +38,27 @@ struct UpdateAvailableBanner: View {
                 .foregroundStyle(RuntimeAtlasTheme.primaryText)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 8)
-
-            if updates.buttonsDisabled {
-                ProgressView()
-                    .controlSize(.small)
-                    .accessibilityLabel(copy.updateInProgress)
-            }
-
-            Button(updateButtonTitle) {
-                updates.updateNow()
-            }
-            .buttonStyle(AtlasButtonStyle(prominent: true))
-            .disabled(updates.buttonsDisabled)
-            .accessibilityHint(copy.updateInstallHint)
-
-            Button(copy.updateDetails) {
-                updates.isSheetPresented = true
-            }
-            .buttonStyle(AtlasButtonStyle())
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .atlasSurface(elevated: true)
-        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder private var updateControls: some View {
+        if updates.buttonsDisabled {
+            ProgressView()
+                .controlSize(.small)
+                .accessibilityLabel(copy.updateInProgress)
+        }
+
+        Button(updateButtonTitle) {
+            updates.updateNow()
+        }
+        .buttonStyle(AtlasButtonStyle(prominent: true))
+        .disabled(updates.buttonsDisabled)
+        .accessibilityHint(copy.updateInstallHint)
+
+        Button(copy.updateDetails) {
+            updates.isSheetPresented = true
+        }
+        .buttonStyle(AtlasButtonStyle())
     }
 
     private var updateButtonTitle: String {

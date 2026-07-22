@@ -64,7 +64,7 @@ struct WorktreeDetailView: View {
                     EvidenceSection(worktree: worktree)
                 }
             }
-            .padding(.horizontal, 26)
+            .padding(.horizontal, 18)
             .padding(.vertical, 24)
             .frame(maxWidth: 1_200, alignment: .leading)
         }
@@ -72,6 +72,21 @@ struct WorktreeDetailView: View {
     }
 
     private var detailHeader: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 14) {
+                headerIdentity
+                Spacer(minLength: 12)
+                headerBadges
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                headerIdentity
+                headerBadges
+            }
+        }
+    }
+
+    private var headerIdentity: some View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -96,21 +111,21 @@ struct WorktreeDetailView: View {
                     .truncationMode(.middle)
                     .textSelection(.enabled)
             }
+        }
+    }
 
-            Spacer()
-
-            HStack(spacing: 7) {
-                AtlasBadge(
-                    text: worktree.detached ? copy.detachedBadge : (worktree.branch ?? copy.noBranchBadge),
-                    icon: "arrow.triangle.branch",
-                    color: RuntimeAtlasTheme.accent
-                )
-                AtlasBadge(
-                    text: worktree.dirty ? copy.dirtyBadge : copy.cleanBadge,
-                    icon: worktree.dirty ? "circle.dotted" : "checkmark.circle.fill",
-                    color: worktree.dirty ? RuntimeAtlasTheme.amber : RuntimeAtlasTheme.mint
-                )
-            }
+    private var headerBadges: some View {
+        HStack(spacing: 7) {
+            AtlasBadge(
+                text: worktree.detached ? copy.detachedBadge : (worktree.branch ?? copy.noBranchBadge),
+                icon: "arrow.triangle.branch",
+                color: RuntimeAtlasTheme.accent
+            )
+            AtlasBadge(
+                text: worktree.dirty ? copy.dirtyBadge : copy.cleanBadge,
+                icon: worktree.dirty ? "circle.dotted" : "checkmark.circle.fill",
+                color: worktree.dirty ? RuntimeAtlasTheme.amber : RuntimeAtlasTheme.mint
+            )
         }
     }
 }
@@ -182,27 +197,15 @@ private struct CodeSection: View {
                     Spacer()
                 }
 
-                HStack(spacing: 8) {
-                    TextField(copy.logicalDBPlaceholder, text: $databaseLabel)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary, design: .monospaced))
-                        .padding(.horizontal, 11)
-                        .frame(height: RuntimeAtlasTheme.controlHeight)
-                        .background {
-                            RoundedRectangle(cornerRadius: RuntimeAtlasTheme.controlRadius, style: .continuous)
-                                .fill(RuntimeAtlasTheme.control)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: RuntimeAtlasTheme.controlRadius, style: .continuous)
-                                        .stroke(RuntimeAtlasTheme.border)
-                                }
-                        }
-                        .accessibilityLabel(copy.logicalDBLabel)
-
-                    Button(copy.save) {
-                        _ = model.saveDatabaseLabel(databaseLabel, for: worktree)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        databaseField
+                        saveDatabaseButton
                     }
-                    .buttonStyle(AtlasButtonStyle(prominent: true))
-                    .accessibilityLabel(copy.saveLogicalDBLabel)
+                    VStack(alignment: .trailing, spacing: 8) {
+                        databaseField
+                        saveDatabaseButton
+                    }
                 }
             }
         }
@@ -216,6 +219,31 @@ private struct CodeSection: View {
             databaseLabel = worktree.databaseLabel ?? ""
         }
     }
+
+    private var databaseField: some View {
+        TextField(copy.logicalDBPlaceholder, text: $databaseLabel)
+            .textFieldStyle(.plain)
+            .font(.system(size: RuntimeAtlasTheme.Typography.secondary, design: .monospaced))
+            .padding(.horizontal, 11)
+            .frame(height: RuntimeAtlasTheme.controlHeight)
+            .background {
+                RoundedRectangle(cornerRadius: RuntimeAtlasTheme.controlRadius, style: .continuous)
+                    .fill(RuntimeAtlasTheme.control)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: RuntimeAtlasTheme.controlRadius, style: .continuous)
+                            .stroke(RuntimeAtlasTheme.border)
+                    }
+            }
+            .accessibilityLabel(copy.logicalDBLabel)
+    }
+
+    private var saveDatabaseButton: some View {
+        Button(copy.save) {
+            _ = model.saveDatabaseLabel(databaseLabel, for: worktree)
+        }
+        .buttonStyle(AtlasButtonStyle(prominent: true))
+        .accessibilityLabel(copy.saveLogicalDBLabel)
+    }
 }
 
 private struct MetadataRow: View {
@@ -225,22 +253,35 @@ private struct MetadataRow: View {
     var monospaced = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 14) {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                metadataLabel.frame(width: 130, alignment: .leading)
+                metadataValue
+                Spacer(minLength: 0)
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                metadataLabel
+                metadataValue
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var metadataLabel: some View {
             Text(label)
                 .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .medium))
                 .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-                .frame(width: 130, alignment: .leading)
-            Text(value.isEmpty ? copy.unavailableValue : value)
+    }
+
+    private var metadataValue: some View {
+        Text(value.isEmpty ? copy.unavailableValue : value)
                 .font(.system(size: RuntimeAtlasTheme.Typography.secondary, design: monospaced ? .monospaced : .default))
                 .foregroundStyle(value.isEmpty ? RuntimeAtlasTheme.amber : RuntimeAtlasTheme.primaryText)
                 .lineLimit(2)
                 .truncationMode(.middle)
                 .textSelection(.enabled)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -338,6 +379,24 @@ private struct RuntimeRailRow: View {
     let badges: [String]
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 12) {
+                railContent
+                Spacer(minLength: 10)
+                badgeStrip.frame(maxWidth: 300)
+            }
+            VStack(alignment: .leading, spacing: 7) {
+                railContent
+                if !badges.isEmpty {
+                    badgeStrip.padding(.leading, 44)
+                }
+            }
+        }
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var railContent: some View {
         HStack(alignment: .center, spacing: 12) {
             ZStack {
                 Circle()
@@ -359,22 +418,19 @@ private struct RuntimeRailRow: View {
                     .truncationMode(.middle)
                     .textSelection(.enabled)
             }
+        }
+    }
 
-            Spacer(minLength: 10)
-
-            if !badges.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 5) {
-                        ForEach(Array(badges.enumerated()), id: \.offset) { _, badge in
-                            PortChip(text: badge, color: color)
-                        }
+    @ViewBuilder private var badgeStrip: some View {
+        if !badges.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 5) {
+                    ForEach(Array(badges.enumerated()), id: \.offset) { _, badge in
+                        PortChip(text: badge, color: color)
                     }
                 }
-                .frame(maxWidth: 300)
             }
         }
-        .padding(.vertical, 10)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -405,15 +461,24 @@ private struct EvidenceSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 7) {
-                EvidenceCountBadge(status: .pass, count: worktree.evidence.currentCounts.pass)
-                EvidenceCountBadge(status: .fail, count: worktree.evidence.currentCounts.fail)
-                EvidenceCountBadge(status: .blocked, count: worktree.evidence.currentCounts.blocked)
-                EvidenceCountBadge(status: .pending, count: worktree.evidence.currentCounts.pending)
-                Spacer()
-                Text(copy.currentSHA)
-                    .font(.system(size: RuntimeAtlasTheme.Typography.badge, weight: .bold, design: .monospaced))
-                    .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 7) {
+                    allEvidenceBadges
+                    Spacer()
+                    currentSHALabel
+                }
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 7) {
+                        EvidenceCountBadge(status: .pass, count: worktree.evidence.currentCounts.pass)
+                        EvidenceCountBadge(status: .fail, count: worktree.evidence.currentCounts.fail)
+                    }
+                    HStack(spacing: 7) {
+                        EvidenceCountBadge(status: .blocked, count: worktree.evidence.currentCounts.blocked)
+                        EvidenceCountBadge(status: .pending, count: worktree.evidence.currentCounts.pending)
+                        Spacer()
+                        currentSHALabel
+                    }
+                }
             }
 
             if let latest = worktree.evidence.latestCurrent {
@@ -463,6 +528,19 @@ private struct EvidenceSection: View {
             }
         }
     }
+
+    @ViewBuilder private var allEvidenceBadges: some View {
+        EvidenceCountBadge(status: .pass, count: worktree.evidence.currentCounts.pass)
+        EvidenceCountBadge(status: .fail, count: worktree.evidence.currentCounts.fail)
+        EvidenceCountBadge(status: .blocked, count: worktree.evidence.currentCounts.blocked)
+        EvidenceCountBadge(status: .pending, count: worktree.evidence.currentCounts.pending)
+    }
+
+    private var currentSHALabel: some View {
+        Text(copy.currentSHA)
+            .font(.system(size: RuntimeAtlasTheme.Typography.badge, weight: .bold, design: .monospaced))
+            .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
+    }
 }
 
 private struct EvidenceCountBadge: View {
@@ -499,15 +577,32 @@ private struct EvidenceRow: View {
     let currentSHA: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            AtlasBadge(
-                text: copy.evidenceDisplayStatusLabel(evidence.displayStatus),
-                icon: evidence.displayStatus.icon,
-                color: evidence.displayStatus.color
-            )
-            .frame(width: 170, alignment: .leading)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 10) {
+                evidenceBadge.frame(width: 170, alignment: .leading)
+                evidenceDetails
+                Spacer(minLength: 0)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                evidenceBadge
+                evidenceDetails
+            }
+        }
+        .padding(.vertical, 3)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(evidenceAccessibilityLabel)
+    }
 
-            VStack(alignment: .leading, spacing: 4) {
+    private var evidenceBadge: some View {
+        AtlasBadge(
+            text: copy.evidenceDisplayStatusLabel(evidence.displayStatus),
+            icon: evidence.displayStatus.icon,
+            color: evidence.displayStatus.color
+        )
+    }
+
+    private var evidenceDetails: some View {
+        VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 7) {
                     Text(copy.evidenceKind(evidence.record.kind))
                         .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .semibold, design: .monospaced))
@@ -550,13 +645,7 @@ private struct EvidenceRow: View {
                 }
                 .font(.system(size: RuntimeAtlasTheme.Typography.badge))
                 .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
-            }
-
-            Spacer(minLength: 0)
         }
-        .padding(.vertical, 3)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(evidenceAccessibilityLabel)
     }
 
     private var evidenceAccessibilityLabel: String {
