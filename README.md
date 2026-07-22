@@ -38,7 +38,7 @@ There is no account, telemetry, cloud sync, server, AI agent, background daemon,
 
 ## Repository commands
 
-Choose **Configure Commands** under a repository in the sidebar to add or edit its shared command definitions. Each worktree screen shows the same command buttons and runs them from that worktree, so configuration stays repository-wide while run/stop state remains isolated per worktree. Runtime Atlas intentionally supports only one command with separate arguments—no pipelines, redirects, `&&`, shell expansion, schedules, or workflow builder.
+Choose **Configure Commands** under a repository in the sidebar to add or edit its shared command definitions. Each worktree screen shows the same compact command buttons and runs them from that worktree, so configuration stays repository-wide while run/stop state remains isolated per worktree. Command text and output stay out of the way until confirmation or output review is needed. Runtime Atlas intentionally supports only one command with separate arguments—no pipelines, redirects, `&&`, shell expansion, schedules, or workflow builder.
 
 For a local server, create a **Keep running** command such as `npm run dev`. Runtime Atlas loads the normal login-shell environment, starts it from the selected worktree, shows limited live output, and can stop only the process group that this app started. Closing Runtime Atlas stops its running sessions.
 

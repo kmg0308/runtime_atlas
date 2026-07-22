@@ -8,6 +8,7 @@ struct WorktreeCommandsSection: View {
     let repository: RepositoryStatus
     let worktree: WorktreeStatus
     @State private var actionToPrepare: CustomActionDefinition?
+    @State private var actionShowingOutput: CustomActionDefinition?
 
     private var actions: [CustomActionDefinition] { model.actions(for: repository.id) }
     private var availableWorktrees: [WorktreeStatus] {
@@ -15,77 +16,84 @@ struct WorktreeCommandsSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(copy.sessionCloseNotice)
-                .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
-                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-
-            ForEach(actions) { action in actionRow(action) }
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 8, alignment: .leading)],
+            alignment: .leading,
+            spacing: 8
+        ) {
+            ForEach(actions) { action in compactAction(action) }
         }
         .sheet(item: $actionToPrepare) { action in
             ActionExecutionView(action: action, repository: repository, worktree: worktree)
                 .environmentObject(model).environmentObject(runner)
                 .environment(\.atlasCopy, copy)
         }
-    }
-
-    @ViewBuilder private func actionRow(_ action: CustomActionDefinition) -> some View {
-        let state = runner.state(for: action, worktreePath: worktree.path)
-        VStack(alignment: .leading, spacing: 9) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 12) {
-                    actionIdentity(action)
-                    Spacer(minLength: 8)
-                    actionControls(action, state: state)
-                }
-                VStack(alignment: .leading, spacing: 10) {
-                    actionIdentity(action)
-                    HStack(spacing: 8) {
-                        Spacer(minLength: 0)
-                        actionControls(action, state: state)
-                    }
-                }
-            }
-            if let state, !state.output.isEmpty {
-                DisclosureGroup(copy.output) {
-                    ScrollView(.horizontal) {
-                        Text(state.output).font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
-                            .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                    }.frame(maxHeight: 180)
-                }.font(.system(size: RuntimeAtlasTheme.Typography.secondary))
+        .sheet(item: $actionShowingOutput) { action in
+            if let state = runner.state(for: action, worktreePath: worktree.path) {
+                ActionOutputView(action: action, state: state)
+                    .environment(\.atlasCopy, copy)
             }
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 6).fill(RuntimeAtlasTheme.control).overlay { RoundedRectangle(cornerRadius: 6).stroke(RuntimeAtlasTheme.border) })
+    }
+
+    @ViewBuilder private func compactAction(_ action: CustomActionDefinition) -> some View {
+        let state = runner.state(for: action, worktreePath: worktree.path)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                Button {
+                    if runner.isRunning(action, worktreePath: worktree.path) {
+                        runner.stop(action: action, worktreePath: worktree.path)
+                    } else {
+                        prepare(action)
+                    }
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: action.kind == .session ? "play.fill" : "terminal.fill")
+                        Text(action.name)
+                            .lineLimit(1)
+                        Spacer(minLength: 3)
+                        if runner.isRunning(action, worktreePath: worktree.path) {
+                            Text(copy.stop)
+                                .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .semibold))
+                                .foregroundStyle(RuntimeAtlasTheme.amber)
+                        }
+                    }
+                }
+                .buttonStyle(CompactCommandButtonStyle(running: runner.isRunning(action, worktreePath: worktree.path)))
+                .disabled(worktree.availability != .available)
+                .accessibilityLabel(commandAccessibilityLabel(action))
+
+                if let state, !state.output.isEmpty {
+                    Button {
+                        actionShowingOutput = action
+                    } label: {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .medium))
+                            .frame(width: 28, height: 28)
+                            .background(RoundedRectangle(cornerRadius: 5).fill(RuntimeAtlasTheme.control))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(RuntimeAtlasTheme.secondaryText)
+                    .help(copy.output)
+                    .accessibilityLabel("\(action.name), \(copy.output)")
+                }
+            }
+
+            if let failure = failureText(state?.phase) {
+                Text(failure)
+                    .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .medium))
+                    .foregroundStyle(RuntimeAtlasTheme.red)
+                    .lineLimit(1)
+            }
+        }
         .accessibilityElement(children: .contain)
     }
 
-    private func actionIdentity(_ action: CustomActionDefinition) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: action.kind == .session ? "play.rectangle.fill" : "terminal.fill")
-                .foregroundStyle(RuntimeAtlasTheme.accent).font(.system(size: 18))
-            VStack(alignment: .leading, spacing: 5) {
-                Text(action.name)
-                    .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
-                Text(action.commandTemplate)
-                    .font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
-                    .foregroundStyle(RuntimeAtlasTheme.secondaryText).lineLimit(3)
-            }
-        }
-    }
-
-    @ViewBuilder private func actionControls(_ action: CustomActionDefinition, state: ActionRunState?) -> some View {
-        Text(phaseText(state?.phase))
-            .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .medium))
-            .foregroundStyle(phaseColor(state?.phase))
+    private func commandAccessibilityLabel(_ action: CustomActionDefinition) -> String {
         if runner.isRunning(action, worktreePath: worktree.path) {
-            Button(copy.stop) { runner.stop(action: action, worktreePath: worktree.path) }
-                .buttonStyle(AtlasButtonStyle())
-        } else {
-            Button(action.kind == .session ? copy.start : copy.run) { prepare(action) }
-                .buttonStyle(AtlasButtonStyle(prominent: true))
-                .disabled(worktree.availability != .available)
+            return "\(action.name), \(copy.running), \(copy.stop)"
         }
+        return "\(action.name), \(action.kind == .session ? copy.start : copy.run)"
     }
 
     private func prepare(_ action: CustomActionDefinition) {
@@ -99,11 +107,62 @@ struct WorktreeCommandsSection: View {
         } else { actionToPrepare = action }
     }
 
-    private func phaseText(_ phase: ActionRunPhase?) -> String {
-        switch phase { case .running: copy.running; case .stopping: copy.stopping; case .succeeded: copy.succeeded; case .stopped: copy.stopped; case .failed(let code): copy.failedExit(code); case nil: "" }
+    private func failureText(_ phase: ActionRunPhase?) -> String? {
+        if case .failed(let code) = phase { return copy.failedExit(code) }
+        return nil
     }
-    private func phaseColor(_ phase: ActionRunPhase?) -> Color {
-        switch phase { case .running: RuntimeAtlasTheme.accent; case .stopping: RuntimeAtlasTheme.amber; case .succeeded, .stopped: RuntimeAtlasTheme.mint; case .failed: RuntimeAtlasTheme.red; case nil: RuntimeAtlasTheme.secondaryText }
+}
+
+private struct CompactCommandButtonStyle: ButtonStyle {
+    let running: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .semibold))
+            .foregroundStyle(RuntimeAtlasTheme.primaryText)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 32)
+            .background {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(RuntimeAtlasTheme.control.opacity(configuration.isPressed ? 0.72 : 1))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(running ? RuntimeAtlasTheme.amber.opacity(0.45) : RuntimeAtlasTheme.border)
+            }
+    }
+}
+
+private struct ActionOutputView: View {
+    @Environment(\.atlasCopy) private var copy
+    @Environment(\.dismiss) private var dismiss
+    let action: CustomActionDefinition
+    let state: ActionRunState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text(action.name)
+                    .font(.system(size: RuntimeAtlasTheme.Typography.modalTitle, weight: .semibold))
+                Spacer()
+                Button(copy.close) { dismiss() }
+            }
+            Text(state.displayCommand)
+                .font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
+                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
+                .textSelection(.enabled)
+            ScrollView([.horizontal, .vertical]) {
+                Text(state.output)
+                    .font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 6).fill(RuntimeAtlasTheme.control))
+        }
+        .padding(20)
+        .frame(minWidth: 460, minHeight: 300)
+        .background(RuntimeAtlasTheme.background)
     }
 }
 

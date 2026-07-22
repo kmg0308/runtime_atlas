@@ -34,13 +34,8 @@ struct WorktreeDetailView: View {
 
                 if let repository = model.selectedRepository,
                    !model.actions(for: repository.id).isEmpty {
-                    SectionCard(
-                        title: copy.actions,
-                        subtitle: copy.worktreeActionsSubtitle
-                    ) {
-                        WorktreeCommandsSection(repository: repository, worktree: worktree)
-                            .environmentObject(model)
-                    }
+                    WorktreeCommandsSection(repository: repository, worktree: worktree)
+                        .environmentObject(model)
                 }
 
                 SectionCard(
