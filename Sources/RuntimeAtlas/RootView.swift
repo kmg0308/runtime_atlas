@@ -1,6 +1,7 @@
 import Foundation
 import RuntimeAtlasCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RootView: View {
     @EnvironmentObject private var model: AtlasAppModel
@@ -158,6 +159,14 @@ private struct RepositorySidebarSection: View {
     let repository: RepositoryStatus
     let onRemove: () -> Void
     @State private var showingCommandSettings = false
+    @State private var displayedWorktrees: [WorktreeStatus]
+    @State private var draggedWorktreePath: String?
+
+    init(repository: RepositoryStatus, onRemove: @escaping () -> Void) {
+        self.repository = repository
+        self.onRemove = onRemove
+        _displayedWorktrees = State(initialValue: repository.worktrees)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -231,24 +240,27 @@ private struct RepositorySidebarSection: View {
                     .padding(.horizontal, 12)
             } else {
                 VStack(spacing: 3) {
-                    ForEach(repository.worktrees) { worktree in
+                    ForEach(displayedWorktrees) { worktree in
                         WorktreeSidebarRow(
                             worktree: worktree,
                             selected: worktree.path == model.selectedWorktreePath,
                             action: { model.select(worktree: worktree) }
                         )
-                        .draggable(dragValue(for: worktree))
-                        .dropDestination(for: String.self) { values, location in
-                            guard let value = values.first,
-                                  let draggedPath = draggedPath(from: value) else { return false }
-                            model.moveWorktree(
-                                in: repository,
-                                draggedPath: draggedPath,
-                                targetPath: worktree.path,
-                                placeAfterTarget: location.y > 28
-                            )
-                            return true
+                        .onDrag {
+                            draggedWorktreePath = worktree.path
+                            return NSItemProvider(object: dragValue(for: worktree) as NSString)
+                        } preview: {
+                            WorktreeDragPreview(worktree: worktree)
                         }
+                        .onDrop(
+                            of: [.plainText],
+                            delegate: WorktreeReorderDropDelegate(
+                                targetPath: worktree.path,
+                                worktrees: $displayedWorktrees,
+                                draggedPath: $draggedWorktreePath,
+                                commit: commitDisplayedOrder
+                            )
+                        )
                     }
                 }
                 .padding(.horizontal, 7)
@@ -259,16 +271,74 @@ private struct RepositorySidebarSection: View {
             .environmentObject(model)
             .environment(\.atlasCopy, copy)
         }
+        .onChange(of: repository.worktrees) { refreshedWorktrees in
+            draggedWorktreePath = nil
+            displayedWorktrees = refreshedWorktrees
+        }
     }
 
     private func dragValue(for worktree: WorktreeStatus) -> String {
         "runtime-atlas-worktree:\(worktree.path)"
     }
 
-    private func draggedPath(from value: String) -> String? {
-        let prefix = "runtime-atlas-worktree:"
-        guard value.hasPrefix(prefix) else { return nil }
-        return String(value.dropFirst(prefix.count))
+    private func commitDisplayedOrder() {
+        draggedWorktreePath = nil
+        if !model.saveWorktreeOrder(in: repository, worktrees: displayedWorktrees) {
+            withAnimation(.easeOut(duration: 0.16)) {
+                displayedWorktrees = repository.worktrees
+            }
+        }
+    }
+}
+
+private struct WorktreeReorderDropDelegate: DropDelegate {
+    let targetPath: String
+    @Binding var worktrees: [WorktreeStatus]
+    @Binding var draggedPath: String?
+    let commit: () -> Void
+
+    func dropEntered(info: DropInfo) {
+        guard let draggedPath,
+              draggedPath != targetPath,
+              let sourceIndex = worktrees.firstIndex(where: { $0.path == draggedPath }),
+              let targetIndex = worktrees.firstIndex(where: { $0.path == targetPath }) else { return }
+
+        withAnimation(.interactiveSpring(response: 0.22, dampingFraction: 0.86)) {
+            let moved = worktrees.remove(at: sourceIndex)
+            worktrees.insert(moved, at: targetIndex)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        commit()
+        return true
+    }
+}
+
+private struct WorktreeDragPreview: View {
+    let worktree: WorktreeStatus
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.up.arrow.down")
+                .foregroundStyle(RuntimeAtlasTheme.accent)
+            Text(URL(fileURLWithPath: worktree.path).lastPathComponent)
+                .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(RuntimeAtlasTheme.primaryText)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(RuntimeAtlasTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(RuntimeAtlasTheme.accent.opacity(0.45))
+        }
     }
 }
 
