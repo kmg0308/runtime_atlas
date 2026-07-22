@@ -295,10 +295,12 @@ private struct MetadataRow: View {
 }
 
 private struct RuntimeMapSection: View {
+    @EnvironmentObject private var model: AtlasAppModel
     @Environment(\.atlasCopy) private var copy
     let worktree: WorktreeStatus
     let processDiscovery: DiscoveryAvailability
     let dockerDiscovery: DiscoveryAvailability
+    @State private var processToStop: RuntimeProcess?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -335,7 +337,10 @@ private struct RuntimeMapSection: View {
                         title: copy.localizedCoreMessage(process.name),
                         detail: copy.processLocation(pid: process.pid, cwd: process.cwd),
                         color: RuntimeAtlasTheme.mint,
-                        badges: process.ports.map { "\($0.address):\($0.port)" }
+                        badges: process.ports.map { "\($0.address):\($0.port)" },
+                        actionTitle: copy.closePorts,
+                        actionAccessibilityLabel: "\(copy.closePorts), \(process.name), PID \(process.pid)",
+                        action: { processToStop = process }
                     )
                 }
             }
@@ -377,6 +382,28 @@ private struct RuntimeMapSection: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(copy.runtimeMapAccessibility(URL(fileURLWithPath: worktree.path).lastPathComponent))
+        .alert(
+            copy.closePortsQuestion,
+            isPresented: Binding(
+                get: { processToStop != nil },
+                set: { if !$0 { processToStop = nil } }
+            ),
+            presenting: processToStop
+        ) { process in
+            Button(copy.stopProcess, role: .destructive) {
+                model.stopListeningProcess(process, in: worktree)
+                processToStop = nil
+            }
+            Button(copy.cancel, role: .cancel) { processToStop = nil }
+        } message: { process in
+            Text(
+                copy.processStopWarning(
+                    name: process.name,
+                    pid: process.pid,
+                    ports: process.ports.map { "\($0.address):\($0.port)" }.joined(separator: ", ")
+                )
+            )
+        }
     }
 
     private func portBadges(_ ports: [PublishedPort]) -> [String] {
@@ -404,23 +431,46 @@ private struct RuntimeRailRow: View {
     let detail: String
     let color: Color
     let badges: [String]
+    let actionTitle: String?
+    let actionAccessibilityLabel: String?
+    let action: (() -> Void)?
+
+    init(
+        icon: String,
+        title: String,
+        detail: String,
+        color: Color,
+        badges: [String],
+        actionTitle: String? = nil,
+        actionAccessibilityLabel: String? = nil,
+        action: (() -> Void)? = nil
+    ) {
+        self.icon = icon
+        self.title = title
+        self.detail = detail
+        self.color = color
+        self.badges = badges
+        self.actionTitle = actionTitle
+        self.actionAccessibilityLabel = actionAccessibilityLabel
+        self.action = action
+    }
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .center, spacing: 12) {
                 railContent
                 Spacer(minLength: 10)
-                badgeStrip.frame(maxWidth: 300)
+                accessories.frame(maxWidth: 380)
             }
             VStack(alignment: .leading, spacing: 7) {
                 railContent
-                if !badges.isEmpty {
-                    badgeStrip.padding(.leading, 44)
+                if !badges.isEmpty || action != nil {
+                    accessories.padding(.leading, 44)
                 }
             }
         }
         .padding(.vertical, 10)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: action == nil ? .combine : .contain)
     }
 
     private var railContent: some View {
@@ -456,6 +506,31 @@ private struct RuntimeRailRow: View {
                         PortChip(text: badge, color: color)
                     }
                 }
+            }
+        }
+    }
+
+    private var accessories: some View {
+        HStack(spacing: 7) {
+            badgeStrip
+            if let actionTitle, let action {
+                Button(action: action) {
+                    Label(actionTitle, systemImage: "xmark.circle")
+                        .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .semibold))
+                        .foregroundStyle(RuntimeAtlasTheme.red)
+                        .padding(.horizontal, 9)
+                        .frame(height: 30)
+                        .background {
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(RuntimeAtlasTheme.control)
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .stroke(RuntimeAtlasTheme.red.opacity(0.34))
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(actionAccessibilityLabel ?? actionTitle)
             }
         }
     }

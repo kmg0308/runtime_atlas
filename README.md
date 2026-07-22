@@ -11,6 +11,7 @@ Runtime Atlas is a local-first native macOS app that shows which code is checked
 - Register a Git repository and discover all of its worktrees with `git worktree list --porcelain`.
 - Show branch or detached HEAD, full/short SHA, dirty state, and unavailable paths without crashing.
 - Map LISTEN TCP ports to a worktree when the process cwd is inside it.
+- Close a mapped listener from its process row after confirming the process name, PID, and ports.
 - Map running Docker containers when a host mount is inside the worktree; a missing CLI, stopped daemon, or permission failure stays a local partial error.
 - Store only a user-entered logical DB label such as `refactoring_test`.
 - Accept a project-reported DB display name through a provider-neutral CLI binding without reading its URL or credentials.
@@ -26,7 +27,7 @@ The first launch follows the primary macOS language (`ko` selects Korean; other 
 
 ## Privacy boundary
 
-Runtime Atlas reads Git metadata, `lsof` LISTEN results, process cwd where macOS permits it, and Docker container/mount/port metadata. It does **not** read `.env` files, third-party process environment variables, DB URLs, passwords, tokens, or database contents. Verification command stdout/stderr is passed directly to your terminal and is never stored. Command output is kept only in limited app memory while the app is open. Command names, templates, input definitions, and effect descriptions are stored locally, so do not put secrets in them. Common credential-shaped command arguments, note fragments, and URLs are redacted before evidence is written; do not intentionally put secrets in commands or notes. Network access is limited to checking and downloading releases from the fixed `kmg0308/runtime_atlas` GitHub repository.
+Runtime Atlas reads Git metadata, `lsof` LISTEN results, process cwd where macOS permits it, and Docker container/mount/port metadata. It does **not** read `.env` files, third-party process environment variables, DB URLs, passwords, tokens, or database contents. Verification command stdout/stderr is passed directly to your terminal and is never stored. Command output is kept only in limited app memory while the app is open. Command names, templates, input definitions, and effect descriptions are stored locally, so do not put secrets in them. Common credential-shaped command arguments, note fragments, and URLs are redacted before evidence is written; do not intentionally put secrets in commands or notes. Network access is limited to checking and downloading releases from the fixed `kmg0308/runtime_atlas` GitHub repository. When you confirm **Close Port**, the app rechecks that the same PID, process name, worktree cwd, and displayed listening ports still match, then sends that process `SIGTERM`. It never escalates automatically to `SIGKILL` and does not stop Docker containers.
 
 Configuration and evidence are user-only, atomically replaced JSON files under:
 
@@ -40,7 +41,7 @@ There is no account, telemetry, cloud sync, server, AI agent, background daemon,
 
 Choose **Configure Commands** under a repository in the sidebar to add or edit its shared command definitions. Each worktree screen shows the same compact command buttons and runs them from that worktree, so configuration stays repository-wide while run/stop state remains isolated per worktree. Command text and output stay out of the way until confirmation or output review is needed. Runtime Atlas intentionally supports only one command with separate arguments—no pipelines, redirects, `&&`, shell expansion, schedules, or workflow builder.
 
-For a local server, create a **Keep running** command such as `npm run dev`. Runtime Atlas loads the normal login-shell environment, starts it from the selected worktree, shows limited live output, and can stop only the process group that this app started. Closing Runtime Atlas stops its running sessions.
+For a local server, create a **Keep running** command such as `npm run dev`. Runtime Atlas loads the normal login-shell environment, starts it from the selected worktree, shows limited live output, and can stop the process group that this app started. Closing Runtime Atlas stops its running sessions. Separately, **Close Port** can request graceful termination of any currently detected listener whose cwd and ports still map to the selected worktree, even if another terminal started it.
 
 For commands that need a value, add a whole-argument placeholder. For example:
 

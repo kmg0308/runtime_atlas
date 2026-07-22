@@ -132,6 +132,29 @@ private final class FailureCollector: @unchecked Sendable {
     }
 }
 
+private final class SignalCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private let result: Int32
+    private var storage: [(Int32, Int32)] = []
+
+    init(result: Int32 = 0) {
+        self.result = result
+    }
+
+    func send(pid: Int32, signal: Int32) -> Int32 {
+        lock.lock()
+        storage.append((pid, signal))
+        lock.unlock()
+        return result
+    }
+
+    var values: [(Int32, Int32)] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
+    }
+}
+
 private func writeUpdateAppBundle(
     in directory: URL,
     name: String,
@@ -315,6 +338,94 @@ suite.run("lsof IPv4 IPv6 ports and cwd parser") {
     let noMatches = ProcessDetector(executor: noMatchExecutor).detect()
     try suite.equal(noMatches.availability, .available, "lsof no-match should be an available empty state")
     try suite.equal(noMatches.processes, [], "lsof no-match should contain no processes")
+}
+
+suite.run("Process termination revalidates PID cwd and listening ports") {
+    let expected = RuntimeProcess(
+        pid: 4_242,
+        name: "node",
+        cwd: "/tmp/project/web",
+        ports: [ListeningPort(address: "*", port: 3_000)]
+    )
+    let available = DiscoveryAvailability.available
+
+    let successfulSignals = SignalCapture()
+    let successful = ProcessTerminator(
+        detector: { ProcessDiscoveryResult(availability: available, processes: [expected]) },
+        signalSender: { successfulSignals.send(pid: $0, signal: $1) },
+        runtimeAtlasPID: 9_999
+    )
+    try successful.terminate(expected, inWorktree: "/tmp/project")
+    try suite.equal(successfulSignals.values.count, 1, "a valid target should receive one signal")
+    try suite.equal(successfulSignals.values.first?.0, expected.pid, "the displayed PID should receive the signal")
+    try suite.equal(successfulSignals.values.first?.1, SIGTERM, "termination must start with SIGTERM")
+
+    let changedCWD = RuntimeProcess(
+        pid: expected.pid,
+        name: expected.name,
+        cwd: "/tmp/other",
+        ports: expected.ports
+    )
+    let changedSignals = SignalCapture()
+    let changed = ProcessTerminator(
+        detector: { ProcessDiscoveryResult(availability: available, processes: [changedCWD]) },
+        signalSender: { changedSignals.send(pid: $0, signal: $1) },
+        runtimeAtlasPID: 9_999
+    )
+    do {
+        try changed.terminate(expected, inWorktree: "/tmp/project")
+        throw AssertionFailure(description: "a reused PID with another cwd was terminated")
+    } catch let error as ProcessTerminationError {
+        try suite.equal(error, .processChanged, "a changed process identity should be rejected")
+    }
+    try suite.equal(changedSignals.values.count, 0, "identity rejection must not send a signal")
+
+    let changedPorts = RuntimeProcess(
+        pid: expected.pid,
+        name: expected.name,
+        cwd: expected.cwd,
+        ports: [ListeningPort(address: "*", port: 4_000)]
+    )
+    let portSignals = SignalCapture()
+    let noLongerListening = ProcessTerminator(
+        detector: { ProcessDiscoveryResult(availability: available, processes: [changedPorts]) },
+        signalSender: { portSignals.send(pid: $0, signal: $1) },
+        runtimeAtlasPID: 9_999
+    )
+    do {
+        try noLongerListening.terminate(expected, inWorktree: "/tmp/project")
+        throw AssertionFailure(description: "a process no longer owning the displayed port was terminated")
+    } catch let error as ProcessTerminationError {
+        try suite.equal(error, .noLongerListening, "changed ports should be rejected")
+    }
+    try suite.equal(portSignals.values.count, 0, "port rejection must not send a signal")
+
+    let failedSignals = SignalCapture(result: -1)
+    let permissionFailure = ProcessTerminator(
+        detector: { ProcessDiscoveryResult(availability: available, processes: [expected]) },
+        signalSender: { failedSignals.send(pid: $0, signal: $1) },
+        runtimeAtlasPID: 9_999
+    )
+    do {
+        try permissionFailure.terminate(expected, inWorktree: "/tmp/project")
+        throw AssertionFailure(description: "a failed signal was reported as successful")
+    } catch let error as ProcessTerminationError {
+        try suite.equal(error, .signalFailed, "signal failure should be explicit")
+    }
+
+    let selfTarget = RuntimeProcess(
+        pid: 4_242,
+        name: "RuntimeAtlas",
+        cwd: "/tmp/project",
+        ports: expected.ports
+    )
+    do {
+        try ProcessTerminator(runtimeAtlasPID: selfTarget.pid)
+            .terminate(selfTarget, inWorktree: "/tmp/project")
+        throw AssertionFailure(description: "Runtime Atlas attempted to terminate itself")
+    } catch let error as ProcessTerminationError {
+        try suite.equal(error, .invalidTarget, "the app process must be rejected")
+    }
 }
 
 suite.run("Local command timeout prevents a stuck refresh") {

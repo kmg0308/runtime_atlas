@@ -14,15 +14,18 @@ final class AtlasAppModel: ObservableObject {
 
     private let configurationStore: ConfigurationStore
     private let statusService: StatusService
+    private let processTerminator: ProcessTerminator
     private var refreshTask: Task<Void, Never>?
     var statusDidChange: ((AtlasStatus) -> Void)?
 
     init(
         configurationStore: ConfigurationStore = ConfigurationStore(),
-        statusService: StatusService = StatusService()
+        statusService: StatusService = StatusService(),
+        processTerminator: ProcessTerminator = ProcessTerminator()
     ) {
         self.configurationStore = configurationStore
         self.statusService = statusService
+        self.processTerminator = processTerminator
         let loadedConfiguration = try? configurationStore.load()
         language = loadedConfiguration?.value.appLanguage ?? .systemDefault
         customActions = loadedConfiguration?.value.customActions ?? []
@@ -177,6 +180,31 @@ final class AtlasAppModel: ObservableObject {
 
     func select(worktree: WorktreeStatus) {
         selectedWorktreePath = worktree.path
+    }
+
+    func stopListeningProcess(_ process: RuntimeProcess, in worktree: WorktreeStatus) {
+        let terminator = processTerminator
+        Task {
+            let failure = await Task.detached(priority: .userInitiated) { () -> String? in
+                do {
+                    try terminator.terminate(process, inWorktree: worktree.path)
+                    return nil
+                } catch let error as LocalizedError {
+                    return error.errorDescription
+                } catch {
+                    return ProcessTerminationError.signalFailed.errorDescription
+                }
+            }.value
+
+            if let failure {
+                operationMessage = copy.localizedCoreMessage(failure)
+                return
+            }
+
+            operationMessage = copy.processStopRequested(process.name)
+            try? await Task.sleep(for: .milliseconds(800))
+            refresh()
+        }
     }
 
     @discardableResult

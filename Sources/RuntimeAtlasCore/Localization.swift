@@ -254,6 +254,18 @@ public struct AtlasCopy: Sendable {
             korean: "이 작업 폴더에서 실행되고(cwd) 포트를 열어 둔(LISTEN) 프로세스가 없습니다."
         )
     }
+    public var closePorts: String { value(english: "Close ports", korean: "포트 닫기") }
+    public var closePortsQuestion: String { value(english: "Close these ports?", korean: "이 포트를 닫을까요?") }
+    public var stopProcess: String { value(english: "Stop process", korean: "프로세스 종료") }
+    public func processStopWarning(name: String, pid: Int32, ports: String) -> String {
+        value(
+            english: "This sends a normal termination request to \(name) (PID \(pid)) to close \(ports). Other work performed by this process also stops.",
+            korean: "\(name)(PID \(pid))에 정상 종료를 요청해 \(ports) 포트를 닫습니다. 이 프로세스가 수행하던 다른 작업도 함께 중지됩니다."
+        )
+    }
+    public func processStopRequested(_ name: String) -> String {
+        value(english: "Asked \(name) to stop.", korean: "\(name)에 종료를 요청했습니다.")
+    }
     public var cwdUnavailable: String { value(english: "run location (cwd) unavailable", korean: "실행 위치(cwd) 확인 불가") }
     public var dockerUnavailable: String { value(english: "Docker unavailable", korean: "Docker 사용 불가") }
     public var dockerCouldNotBeRead: String {
@@ -548,6 +560,10 @@ public struct AtlasCopy: Sendable {
         "Worktree path is missing.": "워크트리 경로가 존재하지 않습니다.",
         "Git could not inspect this worktree.": "Git이 이 워크트리를 검사하지 못했습니다.",
         "Listening TCP ports could not be read.": "LISTEN 중인 TCP 포트를 읽지 못했습니다.",
+        "Runtime Atlas cannot safely stop this process.": "이 프로세스는 안전하게 종료할 수 없습니다.",
+        "The process is no longer running from this worktree. Refresh and try again.": "프로세스가 더 이상 이 작업 폴더에서 실행되고 있지 않습니다. 새로고침 후 다시 시도하세요.",
+        "The process is no longer listening on the displayed ports. Refresh and try again.": "프로세스가 더 이상 표시된 포트를 열고 있지 않습니다. 새로고침 후 다시 시도하세요.",
+        "The process could not be stopped. Check permissions and try again.": "프로세스를 종료하지 못했습니다. 권한을 확인하고 다시 시도하세요.",
         "Docker CLI is not installed.": "Docker CLI가 설치되어 있지 않습니다.",
         "Docker CLI could not be launched.": "Docker CLI를 실행하지 못했습니다.",
         "Docker containers could not be read.": "Docker 컨테이너를 읽지 못했습니다.",
