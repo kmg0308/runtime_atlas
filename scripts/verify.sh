@@ -175,12 +175,12 @@ test "$(cat "$QA_PARENT/stderr")" = "atlas-cli-error"
     --kind browser --status PENDING --note 'Browser evidence pending')
 
 RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" link database \
-    --label cli_test --worktree "$QA_REPO"
+    --label cli_test --worktree "$QA_REPO" --container local-postgres
 python3 - "$QA_DATA/runtime-bindings.json" "$QA_REPO" <<'PY'
 import json, pathlib, sys
 data = json.loads(pathlib.Path(sys.argv[1]).read_text())
 records = data.get("records", [])
-if len(records) != 1 or records[0].get("label") != "cli_test" or records[0].get("worktreePath") != sys.argv[2]:
+if len(records) != 1 or records[0].get("label") != "cli_test" or records[0].get("worktreePath") != sys.argv[2] or records[0].get("containerName") != "local-postgres":
     raise SystemExit(f"runtime binding mismatch: {records}")
 PY
 RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" unlink database --worktree "$QA_REPO"

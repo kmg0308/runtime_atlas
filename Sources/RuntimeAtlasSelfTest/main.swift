@@ -446,7 +446,8 @@ suite.run("Runtime process and container mapping") {
     try ConfigurationStore(paths: paths).setDatabaseLabel("manual_fallback", forWorktree: repository.path)
     try RuntimeBindingStore(paths: paths).linkDatabase(
         label: "reported_test",
-        worktreePath: repository.path
+        worktreePath: repository.path,
+        containerName: "database"
     )
 
     let processExecutor = CommandExecutor { _, arguments, _ in
@@ -468,12 +469,15 @@ suite.run("Runtime process and container mapping") {
         case "info":
             return CommandResult(exitCode: 0, standardOutput: "29.0", standardError: "")
         case "ps":
-            return CommandResult(exitCode: 0, standardOutput: "abc123\n", standardError: "")
+            return CommandResult(exitCode: 0, standardOutput: "abc123\ndb456\n", standardError: "")
         default:
             let json = """
             [{"Id":"abc123","Name":"/web","Config":{"Image":"web"},
             "Mounts":[{"Source":"\(repository.path)","Destination":"/workspace"}],
-            "NetworkSettings":{"Ports":{}}}]
+            "NetworkSettings":{"Ports":{}}},
+            {"Id":"db456","Name":"/database","Config":{"Image":"postgres:17-alpine"},
+            "Mounts":[{"Name":"shared-data","Destination":"/var/lib/postgresql/data"}],
+            "NetworkSettings":{"Ports":{"5432/tcp":[{"HostIp":"127.0.0.1","HostPort":"5432"}]}}}]
             """
             return CommandResult(exitCode: 0, standardOutput: json, standardError: "")
         }
@@ -492,10 +496,11 @@ suite.run("Runtime process and container mapping") {
         throw AssertionFailure(description: "mapped worktree is missing")
     }
     try suite.equal(worktree.processes.map(\.pid), [42], "cwd should map process")
-    try suite.equal(worktree.containers.map(\.name), ["web"], "mount should map container")
+    try suite.equal(worktree.containers.map(\.name), ["database", "web"], "mounts and explicit DB bindings should map containers")
     try suite.equal(worktree.databaseLabel, "reported_test", "active binding should override the display label")
     try suite.equal(worktree.manualDatabaseLabel, "manual_fallback", "automatic binding must not mutate the manual fallback")
     try suite.equal(worktree.databaseBinding?.label, "reported_test", "automatic binding source should remain visible")
+    try suite.equal(worktree.databaseBinding?.containerName, "database", "DB binding should retain its non-secret container relationship")
 }
 
 suite.run("Evidence current statuses and immutable STALE view") {
@@ -773,6 +778,13 @@ suite.run("Runtime DB binding ownership, liveness, and atomic storage") {
         _ = try store.linkDatabase(label: "postgresql://example.invalid/private", worktreePath: worktree)
         throw AssertionFailure(description: "a DB URL was accepted as a runtime binding label")
     } catch DatabaseLabelError.invalid {
+        // Expected.
+    }
+
+    do {
+        _ = try store.linkDatabase(label: "safe_label", worktreePath: worktree, containerName: "https://example.invalid/private")
+        throw AssertionFailure(description: "a URL was accepted as a container name")
+    } catch RuntimeBindingError.invalidContainerName {
         // Expected.
     }
 

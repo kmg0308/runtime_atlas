@@ -317,6 +317,7 @@ public struct RuntimeBindingRecord: Codable, Equatable, Identifiable, Sendable {
     public let kind: RuntimeBindingKind
     public let worktreePath: String
     public let label: String
+    public let containerName: String?
     public let ownerPID: Int32?
     public let registeredAt: Date
 
@@ -325,6 +326,7 @@ public struct RuntimeBindingRecord: Codable, Equatable, Identifiable, Sendable {
         kind: RuntimeBindingKind = .database,
         worktreePath: String,
         label: String,
+        containerName: String? = nil,
         ownerPID: Int32? = nil,
         registeredAt: Date = Date()
     ) {
@@ -332,6 +334,7 @@ public struct RuntimeBindingRecord: Codable, Equatable, Identifiable, Sendable {
         self.kind = kind
         self.worktreePath = worktreePath
         self.label = label
+        self.containerName = containerName
         self.ownerPID = ownerPID
         self.registeredAt = registeredAt
     }

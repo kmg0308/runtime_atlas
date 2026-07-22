@@ -103,6 +103,7 @@ runtime-atlas actions --json
 runtime-atlas link database \
   --label local_project_test \
   --worktree "$PWD" \
+  --container local-postgres \
   --owner-pid "$$"
 
 runtime-atlas unlink database --worktree "$PWD" --owner-pid "$$"
@@ -118,7 +119,7 @@ runtime-atlas record \
 
 `verify` streams the child command's stdout/stderr, returns its original exit code, and records `PASS` for exit 0 or `FAIL` otherwise. `record` accepts `browser` or `manual` and the explicit statuses `PASS`, `FAIL`, `BLOCKED`, or `PENDING`.
 
-`link database` is an optional integration contract for repository development scripts. It stores only the canonical worktree path, display label, optional owner PID, and registration time in `runtime-bindings.json`. Multiple sessions can register the same worktree independently; owner-scoped `unlink` removes only its own session. If no active binding exists, the app keeps using the manual DB display name.
+`link database` is an optional integration contract for repository development scripts. It stores only the canonical worktree path, display label, optional Docker container name, optional owner PID, and registration time in `runtime-bindings.json`. It never accepts a DB URL or credentials. When a container name is registered, Runtime Atlas verifies it against the running containers already returned by Docker and shows that container even when it uses a named volume instead of mounting the worktree. Multiple worktrees may register the same shared container, and owner-scoped `unlink` removes only its own session. If no active binding exists, the app keeps using the manual DB display name.
 
 ## Automatic Release from main
 

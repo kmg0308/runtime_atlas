@@ -363,9 +363,7 @@ private struct RuntimeMapSection: View {
                         title: copy.localizedCoreMessage(container.name),
                         detail: copy.localizedCoreMessage(container.image),
                         color: RuntimeAtlasTheme.accent,
-                        badges: container.ports.map {
-                            "\($0.hostIP.isEmpty ? "*" : $0.hostIP):\($0.hostPort) → \($0.containerPort)/\($0.transport)"
-                        }
+                        badges: portBadges(container.ports)
                     )
                 }
             }
@@ -379,6 +377,24 @@ private struct RuntimeMapSection: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(copy.runtimeMapAccessibility(URL(fileURLWithPath: worktree.path).lastPathComponent))
+    }
+
+    private func portBadges(_ ports: [PublishedPort]) -> [String] {
+        Dictionary(grouping: ports) { port in
+            "\(port.hostPort)|\(port.containerPort)|\(port.transport)"
+        }
+        .values
+        .sorted { lhs, rhs in
+            guard let left = lhs.first, let right = rhs.first else { return lhs.count < rhs.count }
+            if left.hostPort != right.hostPort { return left.hostPort < right.hostPort }
+            if left.containerPort != right.containerPort { return left.containerPort < right.containerPort }
+            return left.transport < right.transport
+        }
+        .compactMap { group in
+            guard let port = group.first else { return nil }
+            let host = group.count > 1 || port.hostIP.isEmpty ? "*" : port.hostIP
+            return "\(host):\(port.hostPort) → \(port.containerPort)/\(port.transport)"
+        }
     }
 }
 

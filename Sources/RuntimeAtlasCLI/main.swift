@@ -51,6 +51,7 @@ private struct RuntimeAtlasCLI {
             let record = try RuntimeBindingStore().linkDatabase(
                 label: options.label ?? "",
                 worktreePath: options.worktreePath,
+                containerName: options.containerName,
                 ownerPID: options.ownerPID
             )
             writeOutput("Linked database \(record.label) to \(record.worktreePath).\n")
@@ -90,12 +91,13 @@ private struct RuntimeAtlasCLI {
         guard arguments.first == "database" else { throw CLIUsageError.invalidBindingArguments }
         var label: String?
         var worktreePath = FileManager.default.currentDirectoryPath
+        var containerName: String?
         var ownerPID: Int32?
         var index = 1
 
         while index < arguments.count {
             let option = arguments[index]
-            guard ["--label", "--worktree", "--owner-pid"].contains(option),
+            guard ["--label", "--worktree", "--container", "--owner-pid"].contains(option),
                   index + 1 < arguments.count else {
                 throw CLIUsageError.invalidBindingArguments
             }
@@ -108,6 +110,8 @@ private struct RuntimeAtlasCLI {
                     throw CLIUsageError.invalidBindingArguments
                 }
                 worktreePath = value
+            case "--container":
+                containerName = value
             case "--owner-pid":
                 guard let parsed = Int32(value), parsed > 0 else {
                     throw CLIUsageError.invalidBindingArguments
@@ -123,10 +127,15 @@ private struct RuntimeAtlasCLI {
             guard let label, !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw CLIUsageError.invalidBindingArguments
             }
-        } else if label != nil {
+        } else if label != nil || containerName != nil {
             throw CLIUsageError.invalidBindingArguments
         }
-        return BindingOptions(label: label, worktreePath: worktreePath, ownerPID: ownerPID)
+        return BindingOptions(
+            label: label,
+            worktreePath: worktreePath,
+            containerName: containerName,
+            ownerPID: ownerPID
+        )
     }
 
     private func actions(arguments: [String]) -> Int32 {
@@ -292,7 +301,7 @@ private struct RuntimeAtlasCLI {
     }
 
     private var linkUsage: String {
-        "Usage: runtime-atlas link database --label <display-name> [--worktree <path>] [--owner-pid <pid>]\n"
+        "Usage: runtime-atlas link database --label <display-name> [--worktree <path>] [--container <docker-name>] [--owner-pid <pid>]\n"
     }
 
     private var unlinkUsage: String {
@@ -332,6 +341,7 @@ private struct RecordOptions {
 private struct BindingOptions {
     let label: String?
     let worktreePath: String
+    let containerName: String?
     let ownerPID: Int32?
 }
 

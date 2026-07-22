@@ -346,11 +346,14 @@ public struct EvidenceStore: Sendable {
 
 public enum RuntimeBindingError: LocalizedError, Equatable, Sendable {
     case invalidOwnerPID
+    case invalidContainerName
 
     public var errorDescription: String? {
         switch self {
         case .invalidOwnerPID:
             return "Owner PID must be a positive integer."
+        case .invalidContainerName:
+            return "Container name must be a Docker name without spaces or URLs."
         }
     }
 }
@@ -374,17 +377,20 @@ public struct RuntimeBindingStore: Sendable {
     public func linkDatabase(
         label: String,
         worktreePath: String,
+        containerName: String? = nil,
         ownerPID: Int32? = nil,
         registeredAt: Date = Date()
     ) throws -> RuntimeBindingRecord {
         let normalizedLabel = try DatabaseLabelValidator.normalized(label)
         guard let normalizedLabel else { throw DatabaseLabelError.invalid }
+        let normalizedContainerName = try normalizeContainerName(containerName)
         if let ownerPID, ownerPID <= 0 { throw RuntimeBindingError.invalidOwnerPID }
 
         let canonicalPath = PathUtilities.canonical(worktreePath)
         let record = RuntimeBindingRecord(
             worktreePath: canonicalPath,
             label: normalizedLabel,
+            containerName: normalizedContainerName,
             ownerPID: ownerPID,
             registeredAt: registeredAt
         )
@@ -397,6 +403,20 @@ public struct RuntimeBindingStore: Sendable {
             document.records.append(record)
         }
         return record
+    }
+
+    private func normalizeContainerName(_ value: String?) throws -> String? {
+        guard let value else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty,
+              normalized.count <= 128,
+              normalized.range(
+                of: #"^[A-Za-z0-9][A-Za-z0-9_.-]*$"#,
+                options: .regularExpression
+              ) != nil else {
+            throw RuntimeBindingError.invalidContainerName
+        }
+        return normalized
     }
 
     public func unlinkDatabase(worktreePath: String, ownerPID: Int32? = nil) throws {

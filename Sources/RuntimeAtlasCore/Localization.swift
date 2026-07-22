@@ -258,12 +258,12 @@ public struct AtlasCopy: Sendable {
     }
     public var unavailableBadge: String { value(english: "UNAVAILABLE", korean: "사용 불가") }
     public var noMappedRunningContainer: String {
-        value(english: "No mapped running container", korean: "연결된 실행 컨테이너 없음")
+        value(english: "No linked Docker container", korean: "연결된 Docker 컨테이너 없음")
     }
     public var dockerAvailableNoMount: String {
         value(
-            english: "Docker is available; no running container has this folder connected as a mount.",
-            korean: "Docker는 사용 가능하지만 이 폴더를 연결한(mount) 실행 컨테이너가 없습니다."
+            english: "No running container mounts this folder or was explicitly registered by the repository.",
+            korean: "이 폴더를 마운트했거나 저장소가 명시적으로 등록한 실행 컨테이너가 없습니다."
         )
     }
     public var dockerAvailableBadge: String { value(english: "DOCKER AVAILABLE", korean: "DOCKER 사용 가능") }

@@ -101,7 +101,8 @@ public struct StatusService: Sendable {
 
         let mappedContainers = dockerDiscovery.containers
             .filter { container in
-                container.mountSources.contains { source in
+                container.name == databaseBinding?.containerName
+                    || container.mountSources.contains { source in
                     PathUtilities.isSameOrDescendant(source, of: path)
                 }
             }
