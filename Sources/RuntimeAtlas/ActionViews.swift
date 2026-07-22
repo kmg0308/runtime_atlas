@@ -17,7 +17,7 @@ struct WorktreeCommandsSection: View {
 
     var body: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 8, alignment: .leading)],
+            columns: [GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 8, alignment: .topLeading)],
             alignment: .leading,
             spacing: 8
         ) {

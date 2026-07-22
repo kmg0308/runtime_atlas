@@ -11,9 +11,23 @@ final class RuntimeAtlasAppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct RuntimeAtlasApp: App {
     @NSApplicationDelegateAdaptor(RuntimeAtlasAppDelegate.self) private var appDelegate
-    @StateObject private var model = AtlasAppModel()
+    @StateObject private var model: AtlasAppModel
     @StateObject private var updates = UpdateModel()
-    @StateObject private var actionRunner = ActionRunner()
+    @StateObject private var actionRunner: ActionRunner
+
+    init() {
+        let model = AtlasAppModel()
+        let actionRunner = ActionRunner()
+        model.statusDidChange = { [weak model, weak actionRunner] status in
+            guard let model, let actionRunner else { return }
+            actionRunner.reconcile(
+                actions: model.customActions,
+                repositories: status.repositories
+            )
+        }
+        _model = StateObject(wrappedValue: model)
+        _actionRunner = StateObject(wrappedValue: actionRunner)
+    }
 
     var body: some Scene {
         WindowGroup("Runtime Atlas", id: "main") {

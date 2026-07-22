@@ -6,6 +6,7 @@ public struct RuntimeAtlasPaths: Sendable {
     public let configurationFile: URL
     public let evidenceFile: URL
     public let runtimeBindingsFile: URL
+    public let actionSessionsFile: URL
 
     public init(baseDirectory: URL? = nil) {
         let resolvedDirectory: URL
@@ -28,6 +29,42 @@ public struct RuntimeAtlasPaths: Sendable {
         configurationFile = directory.appendingPathComponent("configuration.json")
         evidenceFile = directory.appendingPathComponent("evidence.json")
         runtimeBindingsFile = directory.appendingPathComponent("runtime-bindings.json")
+        actionSessionsFile = directory.appendingPathComponent("action-sessions.json")
+    }
+}
+
+public struct ActionSessionRecord: Codable, Equatable, Sendable, Identifiable {
+    public let id: UUID
+    public let actionID: UUID
+    public let worktreePath: String
+    public let supervisorPID: Int32
+    public let identityToken: UUID?
+    public let startedAt: Date
+
+    public init(
+        id: UUID = UUID(),
+        actionID: UUID,
+        worktreePath: String,
+        supervisorPID: Int32,
+        identityToken: UUID?,
+        startedAt: Date = Date()
+    ) {
+        self.id = id
+        self.actionID = actionID
+        self.worktreePath = PathUtilities.canonical(worktreePath)
+        self.supervisorPID = supervisorPID
+        self.identityToken = identityToken
+        self.startedAt = startedAt
+    }
+}
+
+public struct ActionSessionDocument: Codable, Equatable, Sendable {
+    public var schemaVersion: Int
+    public var sessions: [ActionSessionRecord]
+
+    public init(schemaVersion: Int = 1, sessions: [ActionSessionRecord] = []) {
+        self.schemaVersion = schemaVersion
+        self.sessions = sessions
     }
 }
 
@@ -341,6 +378,54 @@ public struct EvidenceStore: Sendable {
         try file.update { document in
             document.records.append(record)
         }
+    }
+}
+
+public struct ActionSessionStore: Sendable {
+    private let file: AtomicJSONFile<ActionSessionDocument>
+
+    public init(paths: RuntimeAtlasPaths = RuntimeAtlasPaths()) {
+        file = AtomicJSONFile(
+            fileURL: paths.actionSessionsFile,
+            emptyDocument: { ActionSessionDocument() },
+            damagedFileDescription: "The command session file is damaged; running command buttons may need to be started again."
+        )
+    }
+
+    public func load() throws -> StoreLoad<ActionSessionDocument> {
+        try file.load()
+    }
+
+    public func upsert(_ record: ActionSessionRecord) throws {
+        try file.update { document in
+            document.sessions.removeAll {
+                $0.actionID == record.actionID
+                    && PathUtilities.canonical($0.worktreePath) == record.worktreePath
+            }
+            document.sessions.append(record)
+        }
+    }
+
+    public func remove(id: UUID) throws {
+        try file.update { document in
+            document.sessions.removeAll { $0.id == id }
+        }
+    }
+
+    public func replace(with sessions: [ActionSessionRecord]) throws {
+        try file.update { document in
+            document.sessions = sessions
+        }
+    }
+}
+
+public enum ActionSessionMatcher {
+    public static func matches(_ record: ActionSessionRecord, commandLine: String) -> Bool {
+        guard commandLine.contains("runtime-atlas-supervisor") else { return false }
+        if let token = record.identityToken {
+            return commandLine.contains("--session-id \(token.uuidString)")
+        }
+        return commandLine.contains("--cwd \(record.worktreePath) --")
     }
 }
 

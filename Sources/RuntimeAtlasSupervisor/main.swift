@@ -19,8 +19,11 @@ private func forceStopChild(_ signalNumber: Int32) {
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
-guard arguments.count >= 3, arguments[0] == "--cwd", arguments[2] == "--" else {
-    fputs("usage: runtime-atlas-supervisor --cwd <path> -- <command> [args...]\n", stderr)
+let cwdIndex = arguments.firstIndex(of: "--cwd")
+guard let cwdIndex,
+      arguments.indices.contains(cwdIndex + 2),
+      arguments[cwdIndex + 2] == "--" else {
+    fputs("usage: runtime-atlas-supervisor [--session-id <uuid>] --cwd <path> -- <command> [args...]\n", stderr)
     exit(64)
 }
 
@@ -29,7 +32,7 @@ guard setpgid(0, 0) == 0 || errno == EACCES || (errno == EPERM && getpgrp() == g
     exit(71)
 }
 
-let command = Array(arguments.dropFirst(3))
+let command = Array(arguments.dropFirst(cwdIndex + 3))
 guard !command.isEmpty else { exit(64) }
 
 let child = Process()
@@ -39,7 +42,7 @@ child.arguments = [
     "if [[ -r \"${ZDOTDIR:-$HOME}/.zshrc\" ]]; then source \"${ZDOTDIR:-$HOME}/.zshrc\"; fi; exec \"$@\"",
     "runtime-atlas"
 ] + command
-child.currentDirectoryURL = URL(fileURLWithPath: arguments[1], isDirectory: true)
+child.currentDirectoryURL = URL(fileURLWithPath: arguments[cwdIndex + 1], isDirectory: true)
 
 do {
     signal(SIGTERM, forwardSignal)

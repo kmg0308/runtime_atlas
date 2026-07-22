@@ -15,6 +15,7 @@ final class AtlasAppModel: ObservableObject {
     private let configurationStore: ConfigurationStore
     private let statusService: StatusService
     private var refreshTask: Task<Void, Never>?
+    var statusDidChange: ((AtlasStatus) -> Void)?
 
     init(
         configurationStore: ConfigurationStore = ConfigurationStore(),
@@ -66,6 +67,7 @@ final class AtlasAppModel: ObservableObject {
                 status = refreshed
                 customActions = (try? configurationStore.load().value.customActions) ?? customActions
                 reconcileSelection(in: refreshed)
+                statusDidChange?(refreshed)
             } else {
                 operationMessage = result.1
             }

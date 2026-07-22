@@ -994,6 +994,49 @@ suite.run("Custom action configuration is backward compatible and atomic") {
     try suite.equal(try store.load().value.customActions, [], "removing a repository should remove its action definitions")
 }
 
+suite.run("Command sessions persist atomically and require supervisor identity") {
+    let temporary = try TemporaryDirectory(prefix: "runtime-atlas-action-sessions")
+    let paths = RuntimeAtlasPaths(baseDirectory: temporary.url)
+    let store = ActionSessionStore(paths: paths)
+    let token = UUID()
+    let record = ActionSessionRecord(
+        actionID: UUID(),
+        worktreePath: "/tmp/runtime-atlas-session",
+        supervisorPID: 4242,
+        identityToken: token,
+        startedAt: Date(timeIntervalSince1970: 123)
+    )
+    try store.upsert(record)
+    try suite.equal(try store.load().value.sessions, [record], "a running session should round-trip")
+
+    let matching = "/Applications/RuntimeAtlas.app/Contents/Helpers/runtime-atlas-supervisor --session-id \(token.uuidString) --cwd /tmp/runtime-atlas-session -- npm run dev"
+    try suite.require(ActionSessionMatcher.matches(record, commandLine: matching), "the exact session token should restore")
+    try suite.require(
+        !ActionSessionMatcher.matches(record, commandLine: matching.replacingOccurrences(of: token.uuidString, with: UUID().uuidString)),
+        "a reused PID with another session token must not restore"
+    )
+
+    let legacy = ActionSessionRecord(
+        actionID: UUID(),
+        worktreePath: "/tmp/runtime-atlas-session",
+        supervisorPID: 4343,
+        identityToken: nil
+    )
+    try suite.require(
+        ActionSessionMatcher.matches(
+            legacy,
+            commandLine: "/path/runtime-atlas-supervisor --cwd /tmp/runtime-atlas-session -- npm run dev"
+        ),
+        "a legacy supervisor should be recognized by its exact worktree"
+    )
+    try store.remove(id: record.id)
+    try suite.equal(try store.load().value.sessions, [], "stopped sessions should be removed")
+
+    try Data("{".utf8).write(to: paths.actionSessionsFile)
+    let damaged = try store.load()
+    try suite.require(damaged.recoveryNotice != nil, "damaged session state should recover without crashing")
+}
+
 suite.run("Stable status JSON schema") {
     let status = AtlasStatus(
         generatedAt: Date(timeIntervalSince1970: 1_000),
