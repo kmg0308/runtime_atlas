@@ -135,6 +135,10 @@ enum UpdateService {
             /bin/echo "Downloaded app CLI helper is missing." >&2
             exit 14
         fi
+        if [[ ! -x "$TMP_TARGET/Contents/Helpers/\(UpdateReleasePolicy.runtimeAtlasActionSupervisorName)" ]]; then
+            /bin/echo "Downloaded app action supervisor is missing." >&2
+            exit 16
+        fi
         if ! /usr/bin/codesign --verify --deep --strict "$TMP_TARGET" >/dev/null 2>&1; then
             /bin/echo "Downloaded app code signature is invalid." >&2
             exit 7
@@ -142,6 +146,10 @@ enum UpdateService {
         if ! /usr/bin/codesign --verify --strict "$TMP_TARGET/Contents/Helpers/\(UpdateReleasePolicy.runtimeAtlasCLIHelperName)" >/dev/null 2>&1; then
             /bin/echo "Downloaded CLI helper code signature is invalid." >&2
             exit 15
+        fi
+        if ! /usr/bin/codesign --verify --strict "$TMP_TARGET/Contents/Helpers/\(UpdateReleasePolicy.runtimeAtlasActionSupervisorName)" >/dev/null 2>&1; then
+            /bin/echo "Downloaded action supervisor code signature is invalid." >&2
+            exit 17
         fi
 
         /bin/cat > "$HELPER" <<'ROOTINSTALL'

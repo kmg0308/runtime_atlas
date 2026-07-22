@@ -143,7 +143,8 @@ private func writeUpdateAppBundle(
     buildVersion: String = "1",
     extraInfoPlistKeys: String = "",
     writeExecutable: Bool = true,
-    writeCLIHelper: Bool = true
+    writeCLIHelper: Bool = true,
+    writeActionSupervisor: Bool = true
 ) throws -> URL {
     let appURL = directory.appendingPathComponent(name, isDirectory: true)
     let contentsURL = appURL.appendingPathComponent("Contents", isDirectory: true)
@@ -186,6 +187,11 @@ private func writeUpdateAppBundle(
     }
     if writeCLIHelper {
         let helperURL = helpersURL.appendingPathComponent(UpdateReleasePolicy.runtimeAtlasCLIHelperName)
+        try "#!/bin/sh\nexit 0\n".write(to: helperURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helperURL.path)
+    }
+    if writeActionSupervisor {
+        let helperURL = helpersURL.appendingPathComponent(UpdateReleasePolicy.runtimeAtlasActionSupervisorName)
         try "#!/bin/sh\nexit 0\n".write(to: helperURL, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helperURL.path)
     }
@@ -589,6 +595,13 @@ suite.run("Korean English localization and language setting compatibility") {
     try suite.equal(korean.addRepository, "저장소 추가", "Korean copy should be available")
     try suite.equal(korean.dockerUnavailable, "Docker 사용 불가", "runtime states should be localized")
     try suite.equal(korean.evidenceKind(.manual), "수동", "evidence kinds should be localized")
+    try suite.equal(korean.runtimeMap, "실행 연결", "technical section names should have a plain Korean primary label")
+    try suite.equal(english.runtimeMap, "Running Connections", "technical section names should have a plain English primary label")
+    try suite.require(korean.detachedHead.contains("detached HEAD"), "plain copy should preserve the exact Git term")
+    try suite.require(english.fullSHA.contains("SHA"), "plain copy should preserve the exact code identifier term")
+    try suite.require(korean.processLocation(pid: 42, cwd: "/tmp/example").contains("cwd"), "process location should preserve cwd as a secondary term")
+    try suite.equal(korean.evidenceDisplayStatusLabel(.stale), "이전 코드 · STALE", "STALE should have a plain localized label")
+    try suite.equal(english.evidenceDisplayStatusLabel(.pass), "Passed · PASS", "PASS should have a plain English label")
     try suite.equal(english.checkForUpdates, "Check for Updates", "English update controls should be available")
     try suite.equal(korean.checkForUpdates, "업데이트 확인", "Korean update controls should be available")
     try suite.require(
@@ -809,6 +822,93 @@ suite.run("Update version, commit, asset, and app bundle policy") {
         writeCLIHelper: false
     )
     try expectUpdateValidationError(.missingCLIHelper, from: missingHelper)
+
+    let missingSupervisor = try writeUpdateAppBundle(
+        in: temporary.url,
+        name: "MissingSupervisor.app",
+        writeActionSupervisor: false
+    )
+    try expectUpdateValidationError(.missingActionSupervisor, from: missingSupervisor)
+}
+
+suite.run("Custom action validation, safe expansion, and worktree input") {
+    let repositoryID = UUID()
+    let worktree = "/tmp/runtime atlas/worktree"
+    let action = CustomActionDefinition(
+        repositoryID: repositoryID,
+        name: "Remove worktree",
+        commandTemplate: "npm run worktree:remove -- {{target}} {{deleteBranch}}",
+        risk: .destructive,
+        workingDirectory: .repositoryRoot,
+        effects: ["Deletes the selected worktree"],
+        inputs: [
+            CustomActionInputDefinition(key: "target", label: "Worktree", kind: .worktree),
+            CustomActionInputDefinition(key: "deleteBranch", label: "Delete branch", kind: .flag, flagArgument: "--delete-branch")
+        ]
+    )
+    let plan = try CustomActionPlanner.plan(
+        action: action,
+        values: ["target": worktree, "deleteBranch": "true"],
+        selectedWorktree: worktree,
+        repositoryRoot: "/tmp/runtime atlas",
+        availableWorktrees: [worktree]
+    )
+    try suite.equal(plan.executable, "npm", "the first token should be the executable")
+    try suite.equal(
+        plan.arguments,
+        ["run", "worktree:remove", "--", worktree, "--delete-branch"],
+        "worktree paths and flags should remain separate arguments"
+    )
+    try suite.equal(plan.currentDirectory, "/tmp/runtime atlas", "repository root should be selected")
+    try suite.require(plan.displayCommand.contains("'/tmp/runtime atlas/worktree'"), "display command should quote spaces")
+
+    for unsafe in [
+        "npm run dev && touch /tmp/no", "npm run dev | tee out", "echo $(whoami)", "echo `whoami`",
+        "/bin/sh -c 'echo ok; touch /tmp/no'", "/usr/bin/env zsh -lc 'echo ok'"
+    ] {
+        let unsafeAction = CustomActionDefinition(repositoryID: repositoryID, name: "Unsafe", commandTemplate: unsafe)
+        do {
+            try CustomActionPlanner.validate(unsafeAction)
+            throw AssertionFailure(description: "unsafe command was accepted: \(unsafe)")
+        } catch is CustomActionError {
+            // Expected.
+        }
+    }
+    for sensitive in ["curl https://example.invalid/private"] {
+        let sensitiveAction = CustomActionDefinition(repositoryID: repositoryID, name: "Sensitive", commandTemplate: sensitive)
+        do {
+            try CustomActionPlanner.validate(sensitiveAction)
+            throw AssertionFailure(description: "sensitive action text was accepted")
+        } catch is CustomActionError {
+            // Expected.
+        }
+    }
+}
+
+suite.run("Custom action configuration is backward compatible and atomic") {
+    let temporary = try TemporaryDirectory(prefix: "runtime-atlas-actions")
+    let paths = RuntimeAtlasPaths(baseDirectory: temporary.url)
+    let legacy = """
+    {"schemaVersion":1,"repositories":[],"databaseLabels":{},"appLanguage":"ko"}
+    """
+    try legacy.write(to: paths.configurationFile, atomically: true, encoding: .utf8)
+    let store = ConfigurationStore(paths: paths, repositoryRootResolver: { $0 })
+    let loaded = try store.load().value
+    try suite.equal(loaded.customActions, [], "legacy configuration should decode without actions")
+
+    let repositoryID = try store.addRepository(path: "/tmp/action-repository")
+    let action = CustomActionDefinition(
+        repositoryID: repositoryID,
+        name: "Start local server",
+        commandTemplate: "npm run dev",
+        kind: .session
+    )
+    try store.saveCustomAction(action)
+    let saved = try store.load().value
+    try suite.equal(saved.schemaVersion, 2, "saving an action should upgrade configuration schema")
+    try suite.equal(saved.customActions, [action], "action should round-trip")
+    try store.removeRepository(id: repositoryID)
+    try suite.equal(try store.load().value.customActions, [], "removing a repository should remove its action definitions")
 }
 
 suite.run("Stable status JSON schema") {

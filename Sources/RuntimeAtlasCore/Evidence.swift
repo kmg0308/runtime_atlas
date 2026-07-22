@@ -117,6 +117,10 @@ public enum PrivacySanitizer {
         sanitizeInline(note)
     }
 
+    public static func containsSensitiveContent(_ value: String) -> Bool {
+        sanitizeInline(value) != value
+    }
+
     private static func sanitizeInline(_ value: String) -> String {
         var sanitized = value
         let headerPattern = #"(?i)\b(authorization|proxy-authorization|cookie|set-cookie|x-api-key)\s*:\s*.+$"#

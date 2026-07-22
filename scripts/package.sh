@@ -6,6 +6,7 @@ APP_NAME="RuntimeAtlas"
 DISPLAY_NAME="Runtime Atlas"
 APP_EXECUTABLE="RuntimeAtlas"
 CLI_EXECUTABLE="runtime-atlas"
+SUPERVISOR_EXECUTABLE="runtime-atlas-supervisor"
 BUNDLE_ID="com.kmg0308.runtimeatlas"
 VERSION="${VERSION:-0.1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
@@ -36,12 +37,14 @@ json_escape() {
 cd "$ROOT_DIR"
 swift build -c release --product "$APP_EXECUTABLE" -Xswiftc -warnings-as-errors
 swift build -c release --product "$CLI_EXECUTABLE" -Xswiftc -warnings-as-errors
+swift build -c release --product "$SUPERVISOR_EXECUTABLE" -Xswiftc -warnings-as-errors
 BIN_DIR="$(swift build -c release --show-bin-path)"
 
 rm -rf "$DIST_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Helpers" "$APP_DIR/Contents/Resources"
 install -m 0755 "$BIN_DIR/$APP_EXECUTABLE" "$APP_DIR/Contents/MacOS/$APP_EXECUTABLE"
 install -m 0755 "$BIN_DIR/$CLI_EXECUTABLE" "$APP_DIR/Contents/Helpers/$CLI_EXECUTABLE"
+install -m 0755 "$BIN_DIR/$SUPERVISOR_EXECUTABLE" "$APP_DIR/Contents/Helpers/$SUPERVISOR_EXECUTABLE"
 swift "$ROOT_DIR/scripts/make_icon.swift" "$APP_DIR/Contents/Resources/RuntimeAtlas.icns"
 
 PLIST_DISPLAY_NAME="$(xml_escape "$DISPLAY_NAME")"
@@ -97,6 +100,7 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 PLIST
 
 codesign --force --sign - "$APP_DIR/Contents/Helpers/$CLI_EXECUTABLE" >/dev/null
+codesign --force --sign - "$APP_DIR/Contents/Helpers/$SUPERVISOR_EXECUTABLE" >/dev/null
 codesign --force --deep --sign - "$APP_DIR" >/dev/null
 xattr -cr "$APP_DIR" 2>/dev/null || true
 

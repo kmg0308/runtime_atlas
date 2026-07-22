@@ -44,8 +44,8 @@ public struct AtlasCopy: Sendable {
     public var noRepositories: String { value(english: "No repositories", korean: "등록된 저장소 없음") }
     public var addRepositoryToDiscover: String {
         value(
-            english: "Add a Git repository to discover its worktrees.",
-            korean: "Git 저장소를 추가해 워크트리를 확인하세요."
+            english: "Add a Git repository to see each working folder (Git worktree).",
+            korean: "Git 저장소를 추가하면 각 작업 폴더(Git worktree)를 함께 보여줍니다."
         )
     }
     public func removeNamedRepository(_ name: String) -> String {
@@ -56,21 +56,21 @@ public struct AtlasCopy: Sendable {
         value(english: "Repository is unavailable.", korean: "저장소를 사용할 수 없습니다.")
     }
     public var noWorktreesFound: String {
-        value(english: "No worktrees found", korean: "워크트리를 찾지 못함")
+        value(english: "No working folders (Git worktrees) found", korean: "작업 폴더(Git worktree)를 찾지 못함")
     }
     public func unavailable(_ reason: String) -> String {
         value(english: "Unavailable — \(localizedCoreMessage(reason))", korean: "사용 불가 — \(localizedCoreMessage(reason))")
     }
-    public var dirtyWorktree: String { value(english: "Dirty worktree", korean: "변경 사항이 있는 워크트리") }
-    public var detachedHead: String { value(english: "Detached HEAD", korean: "분리된 HEAD") }
+    public var dirtyWorktree: String { value(english: "Uncommitted changes", korean: "커밋하지 않은 변경 있음") }
+    public var detachedHead: String { value(english: "Not on a branch (detached HEAD)", korean: "브랜치에 연결되지 않음(detached HEAD)") }
     public var unknownBranch: String { value(english: "Unknown branch", korean: "알 수 없는 브랜치") }
-    public var dirty: String { value(english: "dirty", korean: "변경 있음") }
-    public var clean: String { value(english: "clean", korean: "깨끗함") }
+    public var dirty: String { value(english: "uncommitted changes", korean: "커밋하지 않은 변경 있음") }
+    public var clean: String { value(english: "no uncommitted changes", korean: "커밋하지 않은 변경 없음") }
     public var noAvailableWorktree: String {
-        value(english: "No available worktree", korean: "사용 가능한 워크트리 없음")
+        value(english: "No available working folder (Git worktree)", korean: "사용 가능한 작업 폴더(Git worktree) 없음")
     }
     public var buildRuntimeMap: String {
-        value(english: "Build your runtime map", korean: "런타임 지도를 시작하세요")
+        value(english: "See what is running", korean: "무엇이 실행 중인지 확인하세요")
     }
     public var reviewUnavailableMessage: String {
         value(
@@ -80,8 +80,8 @@ public struct AtlasCopy: Sendable {
     }
     public var addRepositoryEmptyDescription: String {
         value(
-            english: "Add a Git repository to connect code, local runtimes, logical DB labels, and SHA-bound evidence.",
-            korean: "Git 저장소를 추가해 코드, 로컬 런타임, 논리 DB 라벨과 SHA 기반 검증 증거를 연결하세요."
+            english: "Add a Git repository to connect code versions with processes, ports, containers, a DB display name, and verification records.",
+            korean: "Git 저장소를 추가해 코드 버전과 프로세스, 포트, 컨테이너, DB 구분 이름, 검증 기록을 연결하세요."
         )
     }
 
@@ -90,28 +90,92 @@ public struct AtlasCopy: Sendable {
     public var code: String { value(english: "Code", korean: "코드") }
     public var codeSubtitle: String {
         value(
-            english: "The checked-out code identity and local-only DB label.",
-            korean: "체크아웃된 코드 식별 정보와 로컬 전용 DB 라벨입니다."
+            english: "The selected code version and a local-only DB display name.",
+            korean: "선택한 코드 버전과 로컬에서만 쓰는 DB 구분 이름입니다."
         )
     }
-    public var runtimeMap: String { value(english: "Runtime Map", korean: "런타임 지도") }
+    public var runtimeMap: String { value(english: "Running Connections", korean: "실행 연결") }
     public var runtimeMapSubtitle: String {
         value(
-            english: "Only listeners and containers whose cwd or mount falls inside this worktree.",
-            korean: "cwd 또는 mount가 이 워크트리 안에 있는 리스너와 컨테이너만 표시합니다."
+            english: "Processes, containers, and open ports linked to this working folder.",
+            korean: "이 작업 폴더와 연결된 프로세스, 컨테이너와 열린 포트를 보여줍니다."
         )
     }
-    public var evidence: String { value(english: "Evidence", korean: "검증 증거") }
+    public var evidence: String { value(english: "Verification Records", korean: "검증 기록") }
     public var evidenceSubtitle: String {
         value(
-            english: "Recorded results stay immutable; a different current SHA is shown as STALE.",
-            korean: "기록은 변경하지 않으며 현재 SHA가 다르면 STALE로 표시합니다."
+            english: "Results never change. Records for older code are shown as Previous code (STALE).",
+            korean: "결과는 바꾸지 않습니다. 이전 코드의 기록은 이전 코드 기준(STALE)으로 표시합니다."
         )
     }
-    public var detachedBadge: String { value(english: "DETACHED", korean: "분리됨") }
+    public var actions: String { value(english: "Actions", korean: "작업 버튼") }
+    public var actionsSubtitle: String {
+        value(english: "Run repository commands without retyping them in Terminal.", korean: "터미널에 매번 입력하던 저장소 명령을 버튼으로 실행합니다.")
+    }
+    public var configureActions: String { value(english: "Configure Actions", korean: "작업 설정") }
+    public var noActions: String { value(english: "No actions configured", korean: "설정한 작업 없음") }
+    public var noActionsHelp: String {
+        value(english: "Add only the commands you use repeatedly for this repository.", korean: "이 저장소에서 반복해서 쓰는 명령만 추가하세요.")
+    }
+    public var addAction: String { value(english: "Add Action", korean: "작업 추가") }
+    public var editAction: String { value(english: "Edit Action", korean: "작업 편집") }
+    public var actionName: String { value(english: "Button name", korean: "버튼 이름") }
+    public var commandTemplate: String { value(english: "Command", korean: "명령어") }
+    public var actionKind: String { value(english: "How it runs", korean: "실행 방식") }
+    public var oneTimeTask: String { value(english: "Run once", korean: "한 번 실행") }
+    public var runningSession: String { value(english: "Keep running", korean: "계속 실행") }
+    public var runFrom: String { value(english: "Run from", korean: "실행 위치") }
+    public var selectedWorktreeLocation: String { value(english: "Selected working folder", korean: "선택한 작업 폴더") }
+    public var repositoryRootLocation: String { value(english: "Main repository folder", korean: "기준 저장소 폴더") }
+    public var destructiveAction: String { value(english: "Can delete or overwrite data", korean: "데이터를 삭제하거나 덮어쓸 수 있음") }
+    public var effects: String { value(english: "What this changes (one per line)", korean: "이 작업이 바꾸는 것 (한 줄에 하나)") }
+    public var inputs: String { value(english: "Inputs", korean: "실행 전 입력") }
+    public var addInput: String { value(english: "Add Input", korean: "입력 추가") }
+    public var inputKey: String { value(english: "Placeholder key", korean: "치환 이름") }
+    public var inputLabel: String { value(english: "Shown label", korean: "표시 이름") }
+    public var textInput: String { value(english: "Text", korean: "텍스트") }
+    public var worktreeInput: String { value(english: "Working folder", korean: "작업 폴더 선택") }
+    public var checkboxInput: String { value(english: "Checkbox flag", korean: "체크박스 옵션") }
+    public var flagArgument: String { value(english: "Argument when checked", korean: "체크 시 붙일 인수") }
+    public var commandPlaceholderHelp: String {
+        value(english: "Use a whole argument such as {{target}}. Pipes, redirects, &&, and shell expansion are not supported.", korean: "{{target}}처럼 인수 전체를 치환할 수 있습니다. 파이프, 리다이렉트, &&, 셸 확장은 지원하지 않습니다.")
+    }
+    public var start: String { value(english: "Start", korean: "시작") }
+    public var run: String { value(english: "Run", korean: "실행") }
+    public var stop: String { value(english: "Stop", korean: "중지") }
+    public var stopping: String { value(english: "Stopping", korean: "중지 중") }
+    public var running: String { value(english: "Running", korean: "실행 중") }
+    public var succeeded: String { value(english: "Finished", korean: "완료") }
+    public var stopped: String { value(english: "Stopped", korean: "중지됨") }
+    public func failedExit(_ code: Int32) -> String { value(english: "Failed (exit \(code))", korean: "실패 (종료 \(code))") }
+    public var output: String { value(english: "Output", korean: "실행 내용") }
+    public var confirmAction: String { value(english: "Review and Run", korean: "확인 후 실행") }
+    public var destructiveWarning: String {
+        value(english: "Review the exact command and effects. This confirmation is required every time.", korean: "실제 명령과 영향을 확인하세요. 이 확인은 실행할 때마다 필요합니다.")
+    }
+    public var exactCommand: String { value(english: "Exact command", korean: "실제 실행 명령") }
+    public var actionSaved: String { value(english: "Action saved.", korean: "작업을 저장했습니다.") }
+    public var actionSaveFailed: String { value(english: "Action could not be saved.", korean: "작업을 저장하지 못했습니다.") }
+    public var actionRemoveFailed: String { value(english: "Action could not be removed.", korean: "작업을 제거하지 못했습니다.") }
+    public var actionLaunchFailed: String { value(english: "Action could not be started.", korean: "작업을 시작하지 못했습니다.") }
+    public var deleteAction: String { value(english: "Delete Action", korean: "작업 삭제") }
+    public var sessionCloseNotice: String {
+        value(english: "Runtime Atlas stops sessions it started when the app quits.", korean: "Runtime Atlas가 시작한 계속 실행 작업은 앱을 종료하면 함께 중지됩니다.")
+    }
+    public func customActionError(_ error: CustomActionError) -> String {
+        guard language == .korean else { return error.localizedDescription }
+        return switch error {
+        case .invalidName: "작업 이름은 1~60자로 입력하세요."
+        case .invalidTemplate(let reason): "명령어가 올바르지 않습니다: \(reason)"
+        case .invalidInput(let reason): "입력 설정이 올바르지 않습니다: \(reason)"
+        case .missingValue(let key): "{{\(key)}} 값을 입력하세요."
+        case .invalidWorktree(let path): "등록된 작업 폴더가 아닙니다: \(path)"
+        }
+    }
+    public var detachedBadge: String { value(english: "NOT ON BRANCH · DETACHED", korean: "브랜치 없음 · DETACHED") }
     public var noBranchBadge: String { value(english: "NO BRANCH", korean: "브랜치 없음") }
-    public var dirtyBadge: String { value(english: "DIRTY", korean: "변경 있음") }
-    public var cleanBadge: String { value(english: "CLEAN", korean: "깨끗함") }
+    public var dirtyBadge: String { value(english: "UNCOMMITTED CHANGES", korean: "변경 있음") }
+    public var cleanBadge: String { value(english: "NO CHANGES", korean: "변경 없음") }
     public var worktreeUnavailable: String {
         value(english: "Worktree unavailable", korean: "워크트리 사용 불가")
     }
@@ -119,15 +183,15 @@ public struct AtlasCopy: Sendable {
         value(english: "Git could not inspect this worktree.", korean: "Git이 이 워크트리를 검사하지 못했습니다.")
     }
     public var branch: String { value(english: "Branch", korean: "브랜치") }
-    public var fullSHA: String { value(english: "Full SHA", korean: "전체 SHA") }
-    public var workingTree: String { value(english: "Working tree", korean: "작업 트리") }
+    public var fullSHA: String { value(english: "Code version (full SHA)", korean: "코드 버전 (전체 SHA)") }
+    public var workingTree: String { value(english: "Uncommitted changes", korean: "커밋하지 않은 변경") }
     public var unknown: String { value(english: "Unknown", korean: "알 수 없음") }
     public var dirtyWorkingTree: String {
-        value(english: "Dirty — uncommitted changes present", korean: "변경 있음 — 커밋하지 않은 변경 사항 존재")
+        value(english: "Present (Git dirty)", korean: "있음(Git dirty)")
     }
-    public var cleanWorkingTree: String { value(english: "Clean", korean: "깨끗함") }
+    public var cleanWorkingTree: String { value(english: "None (Git clean)", korean: "없음(Git clean)") }
     public var logicalDBLabel: String {
-        value(english: "Logical DB profile label", korean: "논리 DB 프로필 라벨")
+        value(english: "DB display name", korean: "DB 구분 이름")
     }
     public var logicalDBDescription: String {
         value(
@@ -138,7 +202,7 @@ public struct AtlasCopy: Sendable {
     public var logicalDBPlaceholder: String { value(english: "e.g. refactoring_test", korean: "예: refactoring_test") }
     public var save: String { value(english: "Save", korean: "저장") }
     public var saveLogicalDBLabel: String {
-        value(english: "Save logical DB profile label", korean: "논리 DB 프로필 라벨 저장")
+        value(english: "Save DB display name", korean: "DB 구분 이름 저장")
     }
     public var unavailableValue: String { value(english: "Unavailable", korean: "사용 불가") }
     public func detachedAt(_ sha: String) -> String {
@@ -148,18 +212,18 @@ public struct AtlasCopy: Sendable {
         value(english: "Processes unavailable", korean: "프로세스 사용 불가")
     }
     public var listeningPortsUnreadable: String {
-        value(english: "Listening ports could not be read.", korean: "LISTEN 포트를 읽지 못했습니다.")
+        value(english: "Open ports could not be read (LISTEN).", korean: "열린 포트(LISTEN)를 읽지 못했습니다.")
     }
     public var noMappedListeningProcess: String {
-        value(english: "No mapped listening process", korean: "연결된 LISTEN 프로세스 없음")
+        value(english: "No process opening a port", korean: "포트를 열고 기다리는 프로세스 없음")
     }
     public var noListenProcessInWorktree: String {
         value(
-            english: "No LISTEN process cwd falls inside this worktree.",
-            korean: "cwd가 이 워크트리 안에 있는 LISTEN 프로세스가 없습니다."
+            english: "No process with an open LISTEN port is running from this working folder (cwd).",
+            korean: "이 작업 폴더에서 실행되고(cwd) 포트를 열어 둔(LISTEN) 프로세스가 없습니다."
         )
     }
-    public var cwdUnavailable: String { value(english: "cwd unavailable", korean: "cwd 사용 불가") }
+    public var cwdUnavailable: String { value(english: "run location (cwd) unavailable", korean: "실행 위치(cwd) 확인 불가") }
     public var dockerUnavailable: String { value(english: "Docker unavailable", korean: "Docker 사용 불가") }
     public var dockerCouldNotBeRead: String {
         value(english: "Docker could not be read.", korean: "Docker 정보를 읽지 못했습니다.")
@@ -170,21 +234,21 @@ public struct AtlasCopy: Sendable {
     }
     public var dockerAvailableNoMount: String {
         value(
-            english: "Docker is available; no running container mounts this worktree.",
-            korean: "Docker는 사용 가능하지만 이 워크트리를 mount한 실행 컨테이너가 없습니다."
+            english: "Docker is available; no running container has this folder connected as a mount.",
+            korean: "Docker는 사용 가능하지만 이 폴더를 연결한(mount) 실행 컨테이너가 없습니다."
         )
     }
     public var dockerAvailableBadge: String { value(english: "DOCKER AVAILABLE", korean: "DOCKER 사용 가능") }
     public func runtimeMapAccessibility(_ name: String) -> String {
-        value(english: "Runtime map for \(name)", korean: "\(name)의 런타임 지도")
+        value(english: "Running connections for \(name)", korean: "\(name)의 실행 연결")
     }
 
-    public var currentSHA: String { value(english: "CURRENT SHA", korean: "현재 SHA") }
+    public var currentSHA: String { value(english: "CURRENT CODE", korean: "현재 코드") }
     public var latestCurrentEvidence: String {
-        value(english: "Latest current-SHA evidence", korean: "최신 현재-SHA 증거")
+        value(english: "Latest verification for current code", korean: "현재 코드의 최신 검증")
     }
     public var noCurrentEvidence: String {
-        value(english: "No current-SHA evidence", korean: "현재-SHA 증거 없음")
+        value(english: "No verification for current code", korean: "현재 코드의 검증 기록 없음")
     }
     public var runEvidenceCommand: String {
         value(
@@ -192,14 +256,14 @@ public struct AtlasCopy: Sendable {
             korean: "이 워크트리에서 runtime-atlas verify를 실행하거나 브라우저/수동 결과를 기록하세요."
         )
     }
-    public var history: String { value(english: "History", korean: "기록") }
+    public var history: String { value(english: "All records", korean: "전체 기록") }
     public var noEvidenceHistory: String {
         value(english: "No evidence has been recorded for this worktree.", korean: "이 워크트리에 기록된 증거가 없습니다.")
     }
     public func currentSHARecordCount(status: EvidenceDisplayStatus, count: Int) -> String {
         value(
-            english: "\(status.rawValue), \(count) current SHA records",
-            korean: "\(status.rawValue), 현재 SHA 기록 \(count)개"
+            english: "\(evidenceDisplayStatusLabel(status)), \(count) records for current code",
+            korean: "\(evidenceDisplayStatusLabel(status)), 현재 코드 기록 \(count)개"
         )
     }
     public func evidenceKind(_ kind: EvidenceKind) -> String {
@@ -223,18 +287,47 @@ public struct AtlasCopy: Sendable {
         value(english: "viewport \(viewport)", korean: "화면 크기 \(viewport)")
     }
     public func wasStatus(_ status: EvidenceStatus) -> String {
-        value(english: "was \(status.rawValue)", korean: "기록 상태 \(status.rawValue)")
+        value(english: "recorded as \(evidenceStatusLabel(status))", korean: "기록 상태 \(evidenceStatusLabel(status))")
+    }
+    public func processLocation(pid: Int32, cwd: String?) -> String {
+        let location = cwd ?? cwdUnavailable
+        return value(
+            english: "PID \(pid) · Run location (cwd): \(location)",
+            korean: "PID \(pid) · 실행 위치(cwd): \(location)"
+        )
+    }
+    public func evidenceDisplayStatusLabel(_ status: EvidenceDisplayStatus) -> String {
+        switch (language, status) {
+        case (.korean, .pass): "통과 · PASS"
+        case (.korean, .fail): "실패 · FAIL"
+        case (.korean, .blocked): "진행 불가 · BLOCKED"
+        case (.korean, .pending): "확인 전 · PENDING"
+        case (.korean, .stale): "이전 코드 · STALE"
+        case (.english, .pass): "Passed · PASS"
+        case (.english, .fail): "Failed · FAIL"
+        case (.english, .blocked): "Blocked · BLOCKED"
+        case (.english, .pending): "Not checked · PENDING"
+        case (.english, .stale): "Previous code · STALE"
+        }
+    }
+    public func evidenceStatusLabel(_ status: EvidenceStatus) -> String {
+        switch status {
+        case .pass: evidenceDisplayStatusLabel(.pass)
+        case .fail: evidenceDisplayStatusLabel(.fail)
+        case .blocked: evidenceDisplayStatusLabel(.blocked)
+        case .pending: evidenceDisplayStatusLabel(.pending)
+        }
     }
     public func evidenceAccessibility(_ evidence: EvidencePresentation) -> String {
         let stale = evidence.displayStatus == .stale
             ? value(
-                english: ", recorded status \(evidence.record.status.rawValue)",
-                korean: ", 기록 상태 \(evidence.record.status.rawValue)"
+                english: ", recorded status \(evidenceStatusLabel(evidence.record.status))",
+                korean: ", 기록 상태 \(evidenceStatusLabel(evidence.record.status))"
             )
             : ""
         return value(
-            english: "\(evidence.displayStatus.rawValue) \(evidence.record.kind.rawValue) evidence\(stale), SHA \(evidence.record.sha.prefix(7))",
-            korean: "\(evidence.displayStatus.rawValue) \(evidenceKind(evidence.record.kind)) 증거\(stale), SHA \(evidence.record.sha.prefix(7))"
+            english: "\(evidenceDisplayStatusLabel(evidence.displayStatus)) \(evidence.record.kind.rawValue) verification\(stale), code version \(evidence.record.sha.prefix(7))",
+            korean: "\(evidenceDisplayStatusLabel(evidence.displayStatus)) \(evidenceKind(evidence.record.kind)) 검증\(stale), 코드 버전 \(evidence.record.sha.prefix(7))"
         )
     }
     public func format(_ date: Date) -> String {

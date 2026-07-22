@@ -13,6 +13,7 @@ Runtime Atlas is a local-first native macOS app that shows which code is checked
 - Map LISTEN TCP ports to a worktree when the process cwd is inside it.
 - Map running Docker containers when a host mount is inside the worktree; a missing CLI, stopped daemon, or permission failure stays a local partial error.
 - Store only a user-entered logical DB label such as `refactoring_test`.
+- Turn repeated repository commands into local buttons, including one-time tasks and app-owned running sessions.
 - Record command, browser, and manual evidence against the exact worktree SHA; old-SHA evidence is displayed as `STALE` without changing the original record.
 - Export the same state as stable JSON through `runtime-atlas status --json`.
 - Use the full app in Korean or English and switch languages immediately from the macOS Settings window.
@@ -24,7 +25,7 @@ The first launch follows the primary macOS language (`ko` selects Korean; other 
 
 ## Privacy boundary
 
-Runtime Atlas reads Git metadata, `lsof` LISTEN results, process cwd where macOS permits it, and Docker container/mount/port metadata. It does **not** read `.env` files, third-party process environment variables, DB URLs, passwords, tokens, or database contents. Command stdout/stderr is passed directly to your terminal and is never stored. Common credential-shaped command arguments, note fragments, and URLs are redacted before evidence is written; do not intentionally put secrets in commands or notes. Network access is limited to checking and downloading releases from the fixed `kmg0308/runtime_atlas` GitHub repository.
+Runtime Atlas reads Git metadata, `lsof` LISTEN results, process cwd where macOS permits it, and Docker container/mount/port metadata. It does **not** read `.env` files, third-party process environment variables, DB URLs, passwords, tokens, or database contents. Verification command stdout/stderr is passed directly to your terminal and is never stored. Action output is kept only in limited app memory while the app is open. Action names, command templates, input definitions, and effect descriptions are stored locally, so do not put secrets in them. Common credential-shaped command arguments, note fragments, and URLs are redacted before evidence is written; do not intentionally put secrets in commands or notes. Network access is limited to checking and downloading releases from the fixed `kmg0308/runtime_atlas` GitHub repository.
 
 Configuration and evidence are user-only, atomically replaced JSON files under:
 
@@ -33,6 +34,20 @@ Configuration and evidence are user-only, atomically replaced JSON files under:
 ```
 
 There is no account, telemetry, cloud sync, server, AI agent, background daemon, or silent update installation.
+
+## Repository action buttons
+
+Open a worktree and choose **Configure Actions** in **Actions**. Runtime Atlas intentionally supports only one command with separate arguments—no pipelines, redirects, `&&`, shell expansion, schedules, or workflow builder.
+
+For a local server, create a **Keep running** action such as `npm run dev`. Runtime Atlas loads the normal login-shell environment, starts it from the selected worktree, shows limited live output, and can stop only the process group that this app started. Closing Runtime Atlas stops its running sessions.
+
+For commands that need a value, add a whole-argument placeholder. For example:
+
+```text
+npm run worktree:remove -- {{target}} {{deleteBranch}}
+```
+
+Set `target` to **Working folder** and `deleteBranch` to a **Checkbox flag** with `--delete-branch`. Mark commands that delete or overwrite data as destructive; Runtime Atlas then shows the exact expanded command and declared effects for confirmation every time. Definitions are stored in Runtime Atlas settings, never loaded from repository code, and command effects remain the responsibility of the configured repository script.
 
 ## Build and run locally
 
@@ -82,6 +97,7 @@ Run commands from inside the worktree they belong to:
 
 ```bash
 runtime-atlas status --json
+runtime-atlas actions --json
 
 runtime-atlas verify -- swift test
 

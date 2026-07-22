@@ -7,6 +7,7 @@ final class AtlasAppModel: ObservableObject {
     @Published private(set) var status: AtlasStatus?
     @Published private(set) var isRefreshing = false
     @Published private(set) var language: AppLanguage
+    @Published private(set) var customActions: [CustomActionDefinition]
     @Published var selectedWorktreePath: String?
     @Published var operationMessage: String?
     @Published private(set) var languageSaveError: String?
@@ -23,6 +24,7 @@ final class AtlasAppModel: ObservableObject {
         self.statusService = statusService
         let loadedConfiguration = try? configurationStore.load()
         language = loadedConfiguration?.value.appLanguage ?? .systemDefault
+        customActions = loadedConfiguration?.value.customActions ?? []
     }
 
     var copy: AtlasCopy { AtlasCopy(language: language) }
@@ -32,6 +34,15 @@ final class AtlasAppModel: ObservableObject {
         return status?.repositories
             .flatMap(\.worktrees)
             .first { $0.path == selectedWorktreePath }
+    }
+
+    var selectedRepository: RepositoryStatus? {
+        guard let path = selectedWorktreePath else { return nil }
+        return status?.repositories.first { repository in repository.worktrees.contains { $0.path == path } }
+    }
+
+    func actions(for repositoryID: UUID) -> [CustomActionDefinition] {
+        customActions.filter { $0.repositoryID == repositoryID }
     }
 
     func refresh() {
@@ -53,6 +64,7 @@ final class AtlasAppModel: ObservableObject {
             isRefreshing = false
             if let refreshed = result.0 {
                 status = refreshed
+                customActions = (try? configurationStore.load().value.customActions) ?? customActions
                 reconcileSelection(in: refreshed)
             } else {
                 operationMessage = result.1
@@ -130,6 +142,34 @@ final class AtlasAppModel: ObservableObject {
             operationMessage = nil
         } catch {
             languageSaveError = copy.languageSaveFailed
+        }
+    }
+
+    @discardableResult
+    func saveCustomAction(_ action: CustomActionDefinition) -> Bool {
+        do {
+            try configurationStore.saveCustomAction(action)
+            customActions = try configurationStore.load().value.customActions
+            operationMessage = copy.actionSaved
+            return true
+        } catch let error as CustomActionError {
+            operationMessage = copy.customActionError(error)
+            return false
+        } catch let error as LocalizedError {
+            operationMessage = copy.localizedCoreMessage(error.errorDescription ?? copy.actionSaveFailed)
+            return false
+        } catch {
+            operationMessage = copy.actionSaveFailed
+            return false
+        }
+    }
+
+    func removeCustomAction(_ action: CustomActionDefinition) {
+        do {
+            try configurationStore.removeCustomAction(id: action.id)
+            customActions = try configurationStore.load().value.customActions
+        } catch {
+            operationMessage = copy.actionRemoveFailed
         }
     }
 

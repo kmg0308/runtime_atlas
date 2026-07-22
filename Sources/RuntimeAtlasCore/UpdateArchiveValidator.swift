@@ -66,6 +66,13 @@ public enum UpdateArchiveValidator {
                         .path
                 ]
             )
+            try runProcess(
+                executable: "/usr/bin/codesign",
+                arguments: [
+                    "--verify", "--strict",
+                    appURL.appendingPathComponent("Contents/Helpers/\(UpdateReleasePolicy.runtimeAtlasActionSupervisorName)").path
+                ]
+            )
         } catch {
             throw UpdateArchiveValidationError.invalidCodeSignature(String(describing: error))
         }

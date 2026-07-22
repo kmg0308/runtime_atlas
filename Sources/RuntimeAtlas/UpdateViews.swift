@@ -8,12 +8,12 @@ struct UpdateAvailableBanner: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(RuntimeAtlasTheme.accent)
                 .accessibilityHidden(true)
 
             Text(updates.statusText(copy: copy))
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .medium))
                 .foregroundStyle(RuntimeAtlasTheme.primaryText)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -65,10 +65,10 @@ struct UpdateSheetView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(copy.updates)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.modalTitle, weight: .semibold))
                         .foregroundStyle(RuntimeAtlasTheme.primaryText)
                     Text(statusTitle)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .medium))
                         .foregroundStyle(statusColor)
                 }
 
@@ -78,7 +78,8 @@ struct UpdateSheetView: View {
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")
-                        .frame(width: 18, height: 18)
+                        .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(RuntimeAtlasTheme.secondaryText)
@@ -97,17 +98,17 @@ struct UpdateSheetView: View {
                 Divider().overlay(RuntimeAtlasTheme.border)
 
                 Text(updates.statusText(copy: copy))
-                    .font(.system(size: 12))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
                     .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text(copy.updateSigningNotice)
-                    .font(.system(size: 10))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.caption))
                     .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(14)
+            .padding(18)
             .atlasSurface()
 
             HStack(spacing: 10) {
@@ -136,8 +137,8 @@ struct UpdateSheetView: View {
                 }
             }
         }
-        .padding(20)
-        .frame(width: 480)
+        .padding(24)
+        .frame(width: 540)
         .foregroundStyle(RuntimeAtlasTheme.primaryText)
         .background(RuntimeAtlasTheme.background)
         .onAppear {
@@ -183,10 +184,10 @@ struct UpdateSheetView: View {
     private func versionColumn(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .medium))
                 .foregroundStyle(RuntimeAtlasTheme.secondaryText)
             Text(value)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: RuntimeAtlasTheme.Typography.sectionTitle, weight: .semibold))
                 .foregroundStyle(RuntimeAtlasTheme.primaryText)
                 .monospacedDigit()
                 .lineLimit(1)

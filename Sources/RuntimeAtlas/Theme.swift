@@ -1,6 +1,17 @@
 import SwiftUI
 
 enum RuntimeAtlasTheme {
+    enum Typography {
+        static let screenTitle: CGFloat = 25
+        static let modalTitle: CGFloat = 21
+        static let sectionTitle: CGFloat = 17
+        static let body: CGFloat = 14
+        static let secondary: CGFloat = 13
+        static let caption: CGFloat = 12
+        static let technical: CGFloat = 12
+        static let badge: CGFloat = 11
+    }
+
     static let background = Color(red: 0.012, green: 0.016, blue: 0.024)
     static let sidebar = Color(red: 0.025, green: 0.032, blue: 0.043)
     static let surface = Color(red: 0.050, green: 0.063, blue: 0.082)
@@ -20,6 +31,9 @@ enum RuntimeAtlasTheme {
 
     static let cardRadius: CGFloat = 8
     static let controlRadius: CGFloat = 6
+    static let controlHeight: CGFloat = 36
+    static let minimumWindowWidth: CGFloat = 1_080
+    static let minimumWindowHeight: CGFloat = 720
 }
 
 struct AtlasSurfaceModifier: ViewModifier {
@@ -44,10 +58,10 @@ struct AtlasButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .medium))
             .foregroundStyle(RuntimeAtlasTheme.primaryText)
-            .padding(.horizontal, 10)
-            .frame(height: 30)
+            .padding(.horizontal, 12)
+            .frame(height: RuntimeAtlasTheme.controlHeight)
             .background {
                 RoundedRectangle(cornerRadius: RuntimeAtlasTheme.controlRadius, style: .continuous)
                     .fill(

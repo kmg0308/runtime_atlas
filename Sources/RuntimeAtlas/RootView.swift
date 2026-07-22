@@ -5,6 +5,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var model: AtlasAppModel
     @EnvironmentObject private var updates: UpdateModel
+    @EnvironmentObject private var actionRunner: ActionRunner
     @Environment(\.atlasCopy) private var copy
     @State private var repositoryToRemove: RepositoryStatus?
 
@@ -23,11 +24,11 @@ struct RootView: View {
             HSplitView {
                 SidebarView(repositoryToRemove: $repositoryToRemove)
                     .environmentObject(model)
-                    .frame(minWidth: 250, idealWidth: 286, maxWidth: 350)
+                    .frame(minWidth: 290, idealWidth: 330, maxWidth: 420)
 
                 DetailPane()
                     .environmentObject(model)
-                    .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(minWidth: 760, maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .foregroundStyle(RuntimeAtlasTheme.primaryText)
@@ -72,6 +73,7 @@ struct RootView: View {
             presenting: repositoryToRemove
         ) { repository in
             Button(copy.remove, role: .destructive) {
+                actionRunner.stop(actions: model.actions(for: repository.id), worktrees: repository.worktrees)
                 model.removeRepository(repository)
                 repositoryToRemove = nil
             }
@@ -98,11 +100,11 @@ private struct SidebarView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(copy.repositories)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.sectionTitle, weight: .semibold))
                 Spacer()
                 if let count = model.status?.repositories.count {
                     Text("\(count)")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .semibold, design: .rounded))
                         .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
                         .accessibilityLabel(copy.registeredRepositories(count))
                 }
@@ -127,16 +129,16 @@ private struct SidebarView: View {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
                             Text(copy.readingLocalState)
-                                .font(.system(size: 12))
+                                .font(.system(size: RuntimeAtlasTheme.Typography.body))
                                 .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                         }
                         .padding(14)
                     } else {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(copy.noRepositories)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
                             Text(copy.addRepositoryToDiscover)
-                                .font(.system(size: 11))
+                                .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
                                 .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -169,10 +171,10 @@ private struct RepositorySidebarSection: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(repository.name)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
                         .lineLimit(1)
                     Text(repository.path)
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
                         .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -181,7 +183,7 @@ private struct RepositorySidebarSection: View {
                 Spacer(minLength: 4)
                 Button(action: onRemove) {
                     Image(systemName: "trash")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .medium))
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(RuntimeAtlasTheme.secondaryText)
@@ -195,7 +197,7 @@ private struct RepositorySidebarSection: View {
                     .padding(.horizontal, 12)
             } else if repository.worktrees.isEmpty {
                 Text(copy.noWorktreesFound)
-                    .font(.system(size: 10))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.caption))
                     .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                     .padding(.horizontal, 12)
             } else {
@@ -223,7 +225,7 @@ private struct SidebarUnavailable: View {
             Image(systemName: "exclamationmark.triangle.fill")
             Text(copy.unavailable(reason))
         }
-        .font(.system(size: 10))
+        .font(.system(size: RuntimeAtlasTheme.Typography.caption))
         .foregroundStyle(RuntimeAtlasTheme.amber)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .combine)
@@ -241,17 +243,17 @@ private struct WorktreeSidebarRow: View {
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 1)
                     .fill(selectionColor)
-                    .frame(width: 3, height: 30)
+                    .frame(width: 3, height: 40)
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 5) {
                         Text(URL(fileURLWithPath: worktree.path).lastPathComponent)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .medium))
                             .lineLimit(1)
                         if worktree.dirty {
                             Circle()
                                 .fill(RuntimeAtlasTheme.amber)
-                                .frame(width: 6, height: 6)
+                                .frame(width: 8, height: 8)
                                 .accessibilityLabel(copy.dirtyWorktree)
                         }
                     }
@@ -259,20 +261,20 @@ private struct WorktreeSidebarRow: View {
                         Text(worktree.detached ? copy.detachedHead : (worktree.branch ?? copy.unknownBranch))
                             .lineLimit(1)
                         Text(worktree.shortSHA)
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
                     }
-                    .font(.system(size: 9))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.caption))
                     .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                 }
                 Spacer(minLength: 2)
                 if worktree.availability == .unavailable {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 9))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.caption))
                         .foregroundStyle(RuntimeAtlasTheme.amber)
                 }
             }
             .padding(.horizontal, 7)
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
             .contentShape(Rectangle())
             .background {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -327,16 +329,16 @@ private struct EmptyDetailView: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: hasRepositories ? "externaldrive.badge.exclamationmark" : "point.3.connected.trianglepath.dotted")
-                .font(.system(size: 36, weight: .light))
+                .font(.system(size: 44, weight: .light))
                 .foregroundStyle(hasRepositories ? RuntimeAtlasTheme.amber : RuntimeAtlasTheme.accent)
             Text(hasRepositories ? copy.noAvailableWorktree : copy.buildRuntimeMap)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 24, weight: .semibold))
             Text(
                 hasRepositories
                     ? copy.reviewUnavailableMessage
                     : copy.addRepositoryEmptyDescription
             )
-            .font(.system(size: 13))
+            .font(.system(size: 15))
             .foregroundStyle(RuntimeAtlasTheme.secondaryText)
             .multilineTextAlignment(.center)
             .frame(maxWidth: 430)
@@ -352,7 +354,7 @@ private struct EmptyDetailView: View {
 
             if let message = model.operationMessage {
                 Text(message)
-                    .font(.system(size: 11))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
                     .foregroundStyle(RuntimeAtlasTheme.amber)
             }
         }

@@ -269,6 +269,7 @@ public struct ConfigurationStore: Sendable {
                 .filter { $0.id == id }
                 .map { PathUtilities.canonical($0.path) }
             configuration.repositories.removeAll { $0.id == id }
+            configuration.customActions.removeAll { $0.repositoryID == id }
             configuration.databaseLabels = configuration.databaseLabels.filter { path, _ in
                 let canonicalPath = PathUtilities.canonical(path)
                 if canonicalWorktrees.contains(canonicalPath) { return false }
@@ -294,6 +295,27 @@ public struct ConfigurationStore: Sendable {
     public func setAppLanguage(_ language: AppLanguage) throws {
         try file.update { configuration in
             configuration.appLanguage = language
+        }
+    }
+
+    public func saveCustomAction(_ action: CustomActionDefinition) throws {
+        try CustomActionPlanner.validate(action)
+        try file.update { configuration in
+            guard configuration.repositories.contains(where: { $0.id == action.repositoryID }) else {
+                throw CustomActionError.invalidInput("repository is no longer registered")
+            }
+            configuration.schemaVersion = max(configuration.schemaVersion, 2)
+            if let index = configuration.customActions.firstIndex(where: { $0.id == action.id }) {
+                configuration.customActions[index] = action
+            } else {
+                configuration.customActions.append(action)
+            }
+        }
+    }
+
+    public func removeCustomAction(id: UUID) throws {
+        try file.update { configuration in
+            configuration.customActions.removeAll { $0.id == id }
         }
     }
 }

@@ -9,9 +9,9 @@ struct LanguageSettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(copy.settingsTitle)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.modalTitle, weight: .semibold))
                 Text(copy.settingsDescription)
-                    .font(.system(size: 11))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
                     .foregroundStyle(RuntimeAtlasTheme.secondaryText)
             }
 
@@ -24,18 +24,18 @@ struct LanguageSettingsView: View {
 
             if let error = model.languageSaveError {
                 Text(error)
-                    .font(.system(size: 10))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.caption))
                     .foregroundStyle(RuntimeAtlasTheme.red)
             }
 
             Divider().overlay(RuntimeAtlasTheme.border)
 
             Text(copy.settingsPersistence)
-                .font(.system(size: 10))
+                .font(.system(size: RuntimeAtlasTheme.Typography.caption))
                 .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
         }
-        .padding(24)
-        .frame(width: 420, height: 220, alignment: .topLeading)
+        .padding(28)
+        .frame(width: 480, height: 260, alignment: .topLeading)
         .foregroundStyle(RuntimeAtlasTheme.primaryText)
         .background(RuntimeAtlasTheme.background)
     }

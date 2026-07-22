@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "RuntimeAtlasCore", targets: ["RuntimeAtlasCore"]),
         .executable(name: "RuntimeAtlas", targets: ["RuntimeAtlas"]),
         .executable(name: "runtime-atlas", targets: ["RuntimeAtlasCLI"]),
+        .executable(name: "runtime-atlas-supervisor", targets: ["RuntimeAtlasSupervisor"]),
         .executable(name: "RuntimeAtlasSelfTest", targets: ["RuntimeAtlasSelfTest"])
     ],
     targets: [
@@ -22,6 +23,7 @@ let package = Package(
             name: "RuntimeAtlasCLI",
             dependencies: ["RuntimeAtlasCore"]
         ),
+        .executableTarget(name: "RuntimeAtlasSupervisor"),
         .executableTarget(
             name: "RuntimeAtlasSelfTest",
             dependencies: ["RuntimeAtlasCore"]

@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="${VERSION:-0.1.0}"
 APP_DIR="$ROOT_DIR/dist/RuntimeAtlas.app"
 CLI_HELPER="$APP_DIR/Contents/Helpers/runtime-atlas"
+ACTION_SUPERVISOR="$APP_DIR/Contents/Helpers/runtime-atlas-supervisor"
 
 cd "$ROOT_DIR"
 bash -n scripts/package.sh scripts/verify.sh
@@ -15,6 +16,7 @@ swift run RuntimeAtlasSelfTest
 test -d "$APP_DIR"
 test -x "$APP_DIR/Contents/MacOS/RuntimeAtlas"
 test -x "$CLI_HELPER"
+test -x "$ACTION_SUPERVISOR"
 test -f "$APP_DIR/Contents/Resources/RuntimeAtlas.icns"
 test -f "$ROOT_DIR/dist/RuntimeAtlas-$VERSION.zip"
 test -f "$ROOT_DIR/dist/RuntimeAtlas-$VERSION.pkg"
@@ -43,14 +45,49 @@ if /usr/libexec/PlistBuddy -c 'Print :LSBackgroundOnly' "$APP_DIR/Contents/Info.
 fi
 codesign --verify --deep --strict "$APP_DIR"
 codesign --verify --strict "$CLI_HELPER"
+codesign --verify --strict "$ACTION_SUPERVISOR"
 
 unzip -l "$ROOT_DIR/dist/RuntimeAtlas.zip" "RuntimeAtlas.app/Contents/MacOS/RuntimeAtlas" >/dev/null
 unzip -l "$ROOT_DIR/dist/RuntimeAtlas.zip" "RuntimeAtlas.app/Contents/Helpers/runtime-atlas" >/dev/null
+unzip -l "$ROOT_DIR/dist/RuntimeAtlas.zip" "RuntimeAtlas.app/Contents/Helpers/runtime-atlas-supervisor" >/dev/null
 
 PKG_CHECK_PARENT="$(mktemp -d)"
 PKG_CHECK_DIR="$PKG_CHECK_PARENT/pkg-expanded"
 QA_PARENT="$(mktemp -d)"
-trap 'rm -rf "$PKG_CHECK_PARENT" "$QA_PARENT"' EXIT
+ACTION_TEST_PID=""
+cleanup() {
+    if [[ -n "$ACTION_TEST_PID" ]]; then
+        kill -TERM -- "-$ACTION_TEST_PID" 2>/dev/null || true
+    fi
+    rm -rf "$PKG_CHECK_PARENT" "$QA_PARENT"
+}
+trap cleanup EXIT
+
+set +e
+ACTION_ONCE_OUTPUT="$("$ACTION_SUPERVISOR" --cwd "$QA_PARENT" -- /bin/sh -c 'printf action-out; printf action-err >&2; exit 7' 2>"$QA_PARENT/action-once-stderr")"
+ACTION_ONCE_EXIT=$?
+set -e
+test "$ACTION_ONCE_EXIT" -eq 7
+test "$ACTION_ONCE_OUTPUT" = "action-out"
+test "$(cat "$QA_PARENT/action-once-stderr")" = "action-err"
+
+"$ACTION_SUPERVISOR" --cwd "$QA_PARENT" -- /bin/sh -c \
+    'trap "exit 0" TERM; echo $$ > action-child.pid; while :; do sleep 1; done' &
+ACTION_TEST_PID=$!
+for _ in {1..50}; do
+    [[ -f "$QA_PARENT/action-child.pid" ]] && break
+    sleep 0.1
+done
+test -f "$QA_PARENT/action-child.pid"
+ACTION_CHILD_PID="$(cat "$QA_PARENT/action-child.pid")"
+kill -TERM -- "-$ACTION_TEST_PID"
+wait "$ACTION_TEST_PID" || true
+ACTION_TEST_PID=""
+sleep 0.2
+if kill -0 "$ACTION_CHILD_PID" 2>/dev/null; then
+    echo "action supervisor left its child running" >&2
+    exit 1
+fi
 
 swift run RuntimeAtlasSelfTest --validate-update-archive "$ROOT_DIR/dist/RuntimeAtlas.zip"
 printf 'not a zip archive\n' > "$QA_PARENT/invalid-update.zip"
@@ -67,6 +104,7 @@ grep -q 'install-location="/"' "$PKG_CHECK_DIR/PackageInfo"
 test -d "$PKG_CHECK_DIR/Payload/Applications/RuntimeAtlas.app"
 test -x "$PKG_CHECK_DIR/Payload/usr/local/bin/runtime-atlas"
 test -x "$PKG_CHECK_DIR/Payload/Applications/RuntimeAtlas.app/Contents/Helpers/runtime-atlas"
+test -x "$PKG_CHECK_DIR/Payload/Applications/RuntimeAtlas.app/Contents/Helpers/runtime-atlas-supervisor"
 grep -q 'relocatable="false"' "$PKG_CHECK_DIR/PackageInfo"
 
 python3 -m json.tool "$ROOT_DIR/dist/manifest.json" >/dev/null
@@ -158,7 +196,15 @@ done
 wait
 
 RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" status --json > "$QA_PARENT/status.json"
+RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" actions --json > "$QA_PARENT/actions.json"
 python3 -m json.tool "$QA_PARENT/status.json" >/dev/null
+python3 -m json.tool "$QA_PARENT/actions.json" >/dev/null
+python3 - "$QA_PARENT/actions.json" <<'PY'
+import json, pathlib, sys
+data = json.loads(pathlib.Path(sys.argv[1]).read_text())
+if data != {"actions": [], "schemaVersion": 1}:
+    raise SystemExit(f"actions --json schema mismatch: {data}")
+PY
 python3 - "$QA_DATA/evidence.json" "$QA_PARENT/status.json" <<'PY'
 import json
 import pathlib
@@ -183,5 +229,23 @@ if grep -R -E 'DATABASE_URL|TEST_DATABASE_URL|\.env($|[^A-Za-z])' Sources Tests;
     echo "Source must not inspect DB URLs or .env files" >&2
     exit 1
 fi
+
+python3 - "$ROOT_DIR/Sources/RuntimeAtlas" <<'PY'
+import pathlib
+import re
+import sys
+
+too_small = []
+for path in pathlib.Path(sys.argv[1]).glob("*.swift"):
+    source = path.read_text()
+    for match in re.finditer(r"\.font\(\.system\(size:\s*([0-9]+(?:\.[0-9]+)?)", source):
+        if float(match.group(1)) < 11:
+            line = source.count("\n", 0, match.start()) + 1
+            too_small.append(f"{path.name}:{line}:{match.group(1)}pt")
+if too_small:
+    raise SystemExit("UI contains text smaller than 11pt: " + ", ".join(too_small))
+PY
+grep -Fq 'minimumWindowWidth: CGFloat = 1_080' "$ROOT_DIR/Sources/RuntimeAtlas/Theme.swift"
+grep -Fq 'minimumWindowHeight: CGFloat = 720' "$ROOT_DIR/Sources/RuntimeAtlas/Theme.swift"
 
 echo "verify passed"

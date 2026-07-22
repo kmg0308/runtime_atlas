@@ -23,12 +23,34 @@ private struct RuntimeAtlasCLI {
             return verify(arguments: Array(arguments.dropFirst()))
         case "record":
             return record(arguments: Array(arguments.dropFirst()))
+        case "actions":
+            return actions(arguments: Array(arguments.dropFirst()))
         case "help", "--help", "-h":
             writeOutput(usageText)
             return CLIExit.success
         default:
             writeError("Unknown command: \(command)\n\n\(usageText)")
             return CLIExit.usage
+        }
+    }
+
+    private func actions(arguments: [String]) -> Int32 {
+        guard arguments == ["--json"] else {
+            writeError("Usage: runtime-atlas actions --json\n")
+            return CLIExit.usage
+        }
+        do {
+            let definitions = try ConfigurationStore().load().value.customActions
+            let document = ActionCatalog(schemaVersion: 1, actions: definitions)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            var data = try encoder.encode(document)
+            data.append(0x0A)
+            FileHandle.standardOutput.write(data)
+            return CLIExit.success
+        } catch {
+            writeError("Runtime Atlas actions could not be read.\n")
+            return CLIExit.failure
         }
     }
 
@@ -180,6 +202,7 @@ private struct RuntimeAtlasCLI {
 
         Usage:
           runtime-atlas status --json
+          runtime-atlas actions --json
           runtime-atlas verify -- <command and args>
           \(recordUsage.trimmingCharacters(in: .newlines))
 
@@ -187,6 +210,11 @@ private struct RuntimeAtlasCLI {
         common credential-shaped values and URLs are redacted from evidence.
         """ + "\n"
     }
+}
+
+private struct ActionCatalog: Encodable {
+    let schemaVersion: Int
+    let actions: [CustomActionDefinition]
 }
 
 private struct RecordOptions {

@@ -9,7 +9,7 @@ struct WorktreeDetailView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 18) {
+            LazyVStack(alignment: .leading, spacing: 22) {
                 detailHeader
 
                 if let message = model.operationMessage {
@@ -51,6 +51,12 @@ struct WorktreeDetailView: View {
                     )
                 }
 
+                if let repository = model.selectedRepository {
+                    SectionCard(title: copy.actions, subtitle: copy.actionsSubtitle) {
+                        CustomActionsSection(repository: repository, worktree: worktree)
+                    }
+                }
+
                 SectionCard(
                     title: copy.evidence,
                     subtitle: copy.evidenceSubtitle
@@ -58,9 +64,9 @@ struct WorktreeDetailView: View {
                     EvidenceSection(worktree: worktree)
                 }
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 20)
-            .frame(maxWidth: 1_100, alignment: .leading)
+            .padding(.horizontal, 26)
+            .padding(.vertical, 24)
+            .frame(maxWidth: 1_200, alignment: .leading)
         }
         .background(RuntimeAtlasTheme.background)
     }
@@ -75,16 +81,16 @@ struct WorktreeDetailView: View {
                             .stroke(RuntimeAtlasTheme.accent.opacity(0.28))
                     }
                 Image(systemName: "point.3.connected.trianglepath.dotted")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(RuntimeAtlasTheme.accent)
             }
-            .frame(width: 38, height: 38)
+            .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(URL(fileURLWithPath: worktree.path).lastPathComponent)
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.screenTitle, weight: .semibold))
                 Text(worktree.path)
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
                     .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                     .lineLimit(2)
                     .truncationMode(.middle)
@@ -118,18 +124,18 @@ private struct SectionCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.sectionTitle, weight: .semibold))
                 Text(subtitle)
-                    .font(.system(size: 10))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
                     .foregroundStyle(RuntimeAtlasTheme.secondaryText)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 13)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
 
             Divider().overlay(RuntimeAtlasTheme.border)
 
             content()
-                .padding(16)
+                .padding(18)
         }
         .atlasSurface()
     }
@@ -142,7 +148,7 @@ private struct CodeSection: View {
     @State private var databaseLabel = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 18) {
             if worktree.availability == .unavailable {
                 InlineNotice(
                     icon: "exclamationmark.triangle.fill",
@@ -168,9 +174,9 @@ private struct CodeSection: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(copy.logicalDBLabel)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
                         Text(copy.logicalDBDescription)
-                            .font(.system(size: 9))
+                            .font(.system(size: RuntimeAtlasTheme.Typography.caption))
                             .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                     }
                     Spacer()
@@ -179,9 +185,9 @@ private struct CodeSection: View {
                 HStack(spacing: 8) {
                     TextField(copy.logicalDBPlaceholder, text: $databaseLabel)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 11, design: .monospaced))
-                        .padding(.horizontal, 9)
-                        .frame(height: 30)
+                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary, design: .monospaced))
+                        .padding(.horizontal, 11)
+                        .frame(height: RuntimeAtlasTheme.controlHeight)
                         .background {
                             RoundedRectangle(cornerRadius: RuntimeAtlasTheme.controlRadius, style: .continuous)
                                 .fill(RuntimeAtlasTheme.control)
@@ -221,19 +227,19 @@ private struct MetadataRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .medium))
                 .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-                .frame(width: 95, alignment: .leading)
+                .frame(width: 130, alignment: .leading)
             Text(value.isEmpty ? copy.unavailableValue : value)
-                .font(.system(size: 11, design: monospaced ? .monospaced : .default))
+                .font(.system(size: RuntimeAtlasTheme.Typography.secondary, design: monospaced ? .monospaced : .default))
                 .foregroundStyle(value.isEmpty ? RuntimeAtlasTheme.amber : RuntimeAtlasTheme.primaryText)
                 .lineLimit(2)
                 .truncationMode(.middle)
                 .textSelection(.enabled)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
     }
 }
@@ -275,7 +281,7 @@ private struct RuntimeMapSection: View {
                     RuntimeRailRow(
                         icon: "terminal.fill",
                         title: copy.localizedCoreMessage(process.name),
-                        detail: "PID \(process.pid)  ·  \(process.cwd ?? copy.cwdUnavailable)",
+                        detail: copy.processLocation(pid: process.pid, cwd: process.cwd),
                         color: RuntimeAtlasTheme.mint,
                         badges: process.ports.map { "\($0.address):\($0.port)" }
                     )
@@ -338,16 +344,16 @@ private struct RuntimeRailRow: View {
                     .fill(RuntimeAtlasTheme.surface)
                     .overlay(Circle().stroke(color.opacity(0.82), lineWidth: 1.5))
                 Image(systemName: icon)
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.badge, weight: .semibold))
                     .foregroundStyle(color)
             }
-            .frame(width: 25, height: 25)
+            .frame(width: 32, height: 32)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
                 Text(detail)
-                    .font(.system(size: 9, design: detail.contains("/") ? .monospaced : .default))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.caption, design: detail.contains("/") ? .monospaced : .default))
                     .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                     .lineLimit(2)
                     .truncationMode(.middle)
@@ -367,7 +373,7 @@ private struct RuntimeRailRow: View {
                 .frame(maxWidth: 300)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
     }
 }
@@ -378,10 +384,10 @@ private struct PortChip: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+            .font(.system(size: RuntimeAtlasTheme.Typography.badge, weight: .semibold, design: .monospaced))
             .foregroundStyle(color)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
             .background {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                     .fill(color.opacity(0.09))
@@ -406,18 +412,18 @@ private struct EvidenceSection: View {
                 EvidenceCountBadge(status: .pending, count: worktree.evidence.currentCounts.pending)
                 Spacer()
                 Text(copy.currentSHA)
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.badge, weight: .bold, design: .monospaced))
                     .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
             }
 
             if let latest = worktree.evidence.latestCurrent {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(copy.latestCurrentEvidence)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .semibold))
                         .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                     EvidenceRow(evidence: latest, currentSHA: worktree.sha)
                 }
-                .padding(10)
+                .padding(12)
                 .background {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(RuntimeAtlasTheme.control.opacity(0.70))
@@ -439,11 +445,11 @@ private struct EvidenceSection: View {
 
             VStack(alignment: .leading, spacing: 9) {
                 Text(copy.history)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
 
                 if worktree.evidence.history.isEmpty {
                     Text(copy.noEvidenceHistory)
-                        .font(.system(size: 10))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
                         .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                         .padding(.vertical, 4)
                 } else {
@@ -467,14 +473,14 @@ private struct EvidenceCountBadge: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: status.icon)
-            Text(status.rawValue)
+            Text(copy.evidenceDisplayStatusLabel(status))
             Text("\(count)")
                 .fontWeight(.bold)
         }
-        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+        .font(.system(size: RuntimeAtlasTheme.Typography.badge, weight: .semibold, design: .monospaced))
         .foregroundStyle(status.color)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .background {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .fill(status.color.opacity(0.09))
@@ -495,36 +501,36 @@ private struct EvidenceRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             AtlasBadge(
-                text: evidence.displayStatus.rawValue,
+                text: copy.evidenceDisplayStatusLabel(evidence.displayStatus),
                 icon: evidence.displayStatus.icon,
                 color: evidence.displayStatus.color
             )
-            .frame(width: 92, alignment: .leading)
+            .frame(width: 170, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 7) {
                     Text(copy.evidenceKind(evidence.record.kind))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .semibold, design: .monospaced))
                     Text(copy.format(evidence.record.endedAt))
-                        .font(.system(size: 9))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.caption))
                         .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                     if let exitCode = evidence.record.exitCode {
                         Text(copy.exitCode(exitCode))
-                            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                            .font(.system(size: RuntimeAtlasTheme.Typography.badge, weight: .semibold, design: .monospaced))
                             .foregroundStyle(exitCode == 0 ? RuntimeAtlasTheme.mint : RuntimeAtlasTheme.red)
                     }
                 }
 
                 if let command = evidence.record.command {
                     Text(command.joined(separator: " "))
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
                         .foregroundStyle(RuntimeAtlasTheme.primaryText)
                         .lineLimit(3)
                         .textSelection(.enabled)
                 }
                 if let note = evidence.record.note {
                     Text(note)
-                        .font(.system(size: 10))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
                         .foregroundStyle(RuntimeAtlasTheme.primaryText)
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
@@ -532,7 +538,7 @@ private struct EvidenceRow: View {
 
                 HStack(spacing: 8) {
                     Text(String(evidence.record.sha.prefix(7)))
-                        .font(.system(size: 8, design: .monospaced))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.badge, design: .monospaced))
                     Text(evidence.record.dirty ? copy.dirtyAtRecordTime : copy.cleanAtRecordTime)
                     if let viewport = evidence.record.viewport {
                         Text(copy.viewport(viewport))
@@ -542,7 +548,7 @@ private struct EvidenceRow: View {
                             .foregroundStyle(evidence.record.status.displayColor)
                     }
                 }
-                .font(.system(size: 8))
+                .font(.system(size: RuntimeAtlasTheme.Typography.badge))
                 .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
             }
 
@@ -558,7 +564,7 @@ private struct EvidenceRow: View {
     }
 }
 
-private struct InlineNotice: View {
+struct InlineNotice: View {
     let icon: String
     let title: String
     let message: String
@@ -571,15 +577,15 @@ private struct InlineNotice: View {
                 .frame(width: 15)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .semibold))
                 Text(message)
-                    .font(.system(size: 10))
+                    .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
                     .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(10)
+        .padding(12)
         .background {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(color.opacity(0.07))
@@ -592,7 +598,7 @@ private struct InlineNotice: View {
     }
 }
 
-private struct AtlasBadge: View {
+struct AtlasBadge: View {
     let text: String
     let icon: String
     let color: Color
@@ -603,10 +609,10 @@ private struct AtlasBadge: View {
             Text(text)
                 .lineLimit(1)
         }
-        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+        .font(.system(size: RuntimeAtlasTheme.Typography.badge, weight: .semibold, design: .monospaced))
         .foregroundStyle(color)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .background {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .fill(color.opacity(0.09))

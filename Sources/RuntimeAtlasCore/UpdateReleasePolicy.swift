@@ -74,6 +74,7 @@ public enum UpdateReleasePolicy {
         case backgroundOnlyApp
         case missingExecutable
         case missingCLIHelper
+        case missingActionSupervisor
 
         public var description: String {
             switch self {
@@ -99,6 +100,8 @@ public enum UpdateReleasePolicy {
                 return "Downloaded app executable is missing."
             case .missingCLIHelper:
                 return "Downloaded app CLI helper is missing."
+            case .missingActionSupervisor:
+                return "Downloaded app action supervisor is missing."
             }
         }
     }
@@ -108,6 +111,7 @@ public enum UpdateReleasePolicy {
     public static let runtimeAtlasBundleIdentifier = "com.kmg0308.runtimeatlas"
     public static let runtimeAtlasExecutableName = "RuntimeAtlas"
     public static let runtimeAtlasCLIHelperName = "runtime-atlas"
+    public static let runtimeAtlasActionSupervisorName = "runtime-atlas-supervisor"
 
     public static func compareVersions(_ lhs: String, _ rhs: String) -> ComparisonResult {
         let left = versionParts(lhs)
@@ -229,6 +233,11 @@ public enum UpdateReleasePolicy {
             .appendingPathComponent(runtimeAtlasCLIHelperName)
         guard fileManager.isExecutableFile(atPath: helperURL.path) else {
             throw AppBundleValidationError.missingCLIHelper
+        }
+        let supervisorURL = helperURL.deletingLastPathComponent()
+            .appendingPathComponent(runtimeAtlasActionSupervisorName)
+        guard fileManager.isExecutableFile(atPath: supervisorURL.path) else {
+            throw AppBundleValidationError.missingActionSupervisor
         }
     }
 

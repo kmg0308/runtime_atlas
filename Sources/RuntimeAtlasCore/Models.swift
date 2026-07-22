@@ -69,17 +69,103 @@ public struct RuntimeAtlasConfiguration: Codable, Equatable, Sendable {
     public var repositories: [RepositoryRegistration]
     public var databaseLabels: [String: String]
     public var appLanguage: AppLanguage?
+    public var customActions: [CustomActionDefinition]
 
     public init(
-        schemaVersion: Int = 1,
+        schemaVersion: Int = 2,
         repositories: [RepositoryRegistration] = [],
         databaseLabels: [String: String] = [:],
-        appLanguage: AppLanguage? = nil
+        appLanguage: AppLanguage? = nil,
+        customActions: [CustomActionDefinition] = []
     ) {
         self.schemaVersion = schemaVersion
         self.repositories = repositories
         self.databaseLabels = databaseLabels
         self.appLanguage = appLanguage
+        self.customActions = customActions
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, repositories, databaseLabels, appLanguage, customActions
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        repositories = try container.decodeIfPresent([RepositoryRegistration].self, forKey: .repositories) ?? []
+        databaseLabels = try container.decodeIfPresent([String: String].self, forKey: .databaseLabels) ?? [:]
+        appLanguage = try container.decodeIfPresent(AppLanguage.self, forKey: .appLanguage)
+        customActions = try container.decodeIfPresent([CustomActionDefinition].self, forKey: .customActions) ?? []
+    }
+}
+
+public enum CustomActionKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    case task
+    case session
+    public var id: String { rawValue }
+}
+
+public enum CustomActionRisk: String, Codable, CaseIterable, Identifiable, Sendable {
+    case normal
+    case destructive
+    public var id: String { rawValue }
+}
+
+public enum CustomActionWorkingDirectory: String, Codable, CaseIterable, Identifiable, Sendable {
+    case selectedWorktree
+    case repositoryRoot
+    public var id: String { rawValue }
+}
+
+public enum CustomActionInputKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    case text
+    case worktree
+    case flag
+    public var id: String { rawValue }
+}
+
+public struct CustomActionInputDefinition: Codable, Equatable, Identifiable, Sendable {
+    public var id: UUID
+    public var key: String
+    public var label: String
+    public var kind: CustomActionInputKind
+    public var flagArgument: String?
+
+    public init(id: UUID = UUID(), key: String, label: String, kind: CustomActionInputKind, flagArgument: String? = nil) {
+        self.id = id
+        self.key = key
+        self.label = label
+        self.kind = kind
+        self.flagArgument = flagArgument
+    }
+}
+
+public struct CustomActionDefinition: Codable, Equatable, Identifiable, Sendable {
+    public var id: UUID
+    public var repositoryID: UUID
+    public var name: String
+    public var commandTemplate: String
+    public var kind: CustomActionKind
+    public var risk: CustomActionRisk
+    public var workingDirectory: CustomActionWorkingDirectory
+    public var effects: [String]
+    public var inputs: [CustomActionInputDefinition]
+
+    public init(
+        id: UUID = UUID(), repositoryID: UUID, name: String, commandTemplate: String,
+        kind: CustomActionKind = .task, risk: CustomActionRisk = .normal,
+        workingDirectory: CustomActionWorkingDirectory = .selectedWorktree,
+        effects: [String] = [], inputs: [CustomActionInputDefinition] = []
+    ) {
+        self.id = id
+        self.repositoryID = repositoryID
+        self.name = name
+        self.commandTemplate = commandTemplate
+        self.kind = kind
+        self.risk = risk
+        self.workingDirectory = workingDirectory
+        self.effects = effects
+        self.inputs = inputs
     }
 }
 
