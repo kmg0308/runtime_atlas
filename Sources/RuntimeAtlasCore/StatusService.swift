@@ -3,6 +3,7 @@ import Foundation
 public struct StatusService: Sendable {
     private let configurationStore: ConfigurationStore
     private let evidenceStore: EvidenceStore
+    private let runtimeBindingStore: RuntimeBindingStore
     private let gitInspector: GitInspector
     private let processDetector: ProcessDetector
     private let dockerDetector: DockerDetector
@@ -10,12 +11,14 @@ public struct StatusService: Sendable {
     public init(
         configurationStore: ConfigurationStore = ConfigurationStore(),
         evidenceStore: EvidenceStore = EvidenceStore(),
+        runtimeBindingStore: RuntimeBindingStore = RuntimeBindingStore(),
         gitInspector: GitInspector = GitInspector(),
         processDetector: ProcessDetector = ProcessDetector(),
         dockerDetector: DockerDetector = DockerDetector()
     ) {
         self.configurationStore = configurationStore
         self.evidenceStore = evidenceStore
+        self.runtimeBindingStore = runtimeBindingStore
         self.gitInspector = gitInspector
         self.processDetector = processDetector
         self.dockerDetector = dockerDetector
@@ -24,6 +27,7 @@ public struct StatusService: Sendable {
     public func makeStatus() throws -> AtlasStatus {
         let configurationLoad = try configurationStore.load()
         let evidenceLoad = try evidenceStore.load()
+        let runtimeBindingLoad = try runtimeBindingStore.load()
         let processDiscovery = processDetector.detect()
         let dockerDiscovery = dockerDetector.detect()
 
@@ -32,6 +36,9 @@ public struct StatusService: Sendable {
             notices.append(AtlasNotice(kind: .error, message: recovery))
         }
         if let recovery = evidenceLoad.recoveryNotice {
+            notices.append(AtlasNotice(kind: .error, message: recovery))
+        }
+        if let recovery = runtimeBindingLoad.recoveryNotice {
             notices.append(AtlasNotice(kind: .error, message: recovery))
         }
 
@@ -44,6 +51,7 @@ public struct StatusService: Sendable {
                         worktree,
                         configuration: configuration,
                         evidence: evidenceLoad.value.records,
+                        runtimeBindings: runtimeBindingLoad.value.records,
                         processDiscovery: processDiscovery,
                         dockerDiscovery: dockerDiscovery
                     )
@@ -72,10 +80,16 @@ public struct StatusService: Sendable {
         _ worktree: InspectedWorktree,
         configuration: RuntimeAtlasConfiguration,
         evidence: [EvidenceRecord],
+        runtimeBindings: [RuntimeBindingRecord],
         processDiscovery: ProcessDiscoveryResult,
         dockerDiscovery: DockerDiscoveryResult
     ) -> WorktreeStatus {
         let path = PathUtilities.canonical(worktree.path)
+        let manualDatabaseLabel = configuration.databaseLabels[path]
+        let databaseBinding = RuntimeBindingEvaluator.activeDatabaseBinding(
+            records: runtimeBindings,
+            worktreePath: path
+        )
         let mappedProcesses = processDiscovery.processes
             .filter { process in
                 guard let cwd = process.cwd else { return false }
@@ -102,7 +116,9 @@ public struct StatusService: Sendable {
             dirty: worktree.dirty,
             availability: worktree.availability,
             unavailableReason: worktree.unavailableReason,
-            databaseLabel: configuration.databaseLabels[path],
+            databaseLabel: databaseBinding?.label ?? manualDatabaseLabel,
+            manualDatabaseLabel: manualDatabaseLabel,
+            databaseBinding: databaseBinding,
             processes: mappedProcesses,
             containers: mappedContainers,
             evidence: EvidenceEvaluator.overview(

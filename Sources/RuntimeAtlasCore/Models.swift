@@ -308,6 +308,45 @@ public struct EvidenceDocument: Codable, Equatable, Sendable {
     }
 }
 
+public enum RuntimeBindingKind: String, Codable, Sendable {
+    case database
+}
+
+public struct RuntimeBindingRecord: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let kind: RuntimeBindingKind
+    public let worktreePath: String
+    public let label: String
+    public let ownerPID: Int32?
+    public let registeredAt: Date
+
+    public init(
+        id: UUID = UUID(),
+        kind: RuntimeBindingKind = .database,
+        worktreePath: String,
+        label: String,
+        ownerPID: Int32? = nil,
+        registeredAt: Date = Date()
+    ) {
+        self.id = id
+        self.kind = kind
+        self.worktreePath = worktreePath
+        self.label = label
+        self.ownerPID = ownerPID
+        self.registeredAt = registeredAt
+    }
+}
+
+public struct RuntimeBindingDocument: Codable, Equatable, Sendable {
+    public var schemaVersion: Int
+    public var records: [RuntimeBindingRecord]
+
+    public init(schemaVersion: Int = 1, records: [RuntimeBindingRecord] = []) {
+        self.schemaVersion = schemaVersion
+        self.records = records
+    }
+}
+
 public struct EvidencePresentation: Codable, Equatable, Sendable, Identifiable {
     public var id: UUID { record.id }
 
@@ -362,6 +401,8 @@ public struct WorktreeStatus: Codable, Equatable, Sendable, Identifiable {
     public let availability: AvailabilityState
     public let unavailableReason: String?
     public let databaseLabel: String?
+    public let manualDatabaseLabel: String?
+    public let databaseBinding: RuntimeBindingRecord?
     public let processes: [RuntimeProcess]
     public let containers: [RuntimeContainer]
     public let evidence: EvidenceOverview
@@ -376,6 +417,8 @@ public struct WorktreeStatus: Codable, Equatable, Sendable, Identifiable {
         availability: AvailabilityState,
         unavailableReason: String?,
         databaseLabel: String?,
+        manualDatabaseLabel: String? = nil,
+        databaseBinding: RuntimeBindingRecord? = nil,
         processes: [RuntimeProcess],
         containers: [RuntimeContainer],
         evidence: EvidenceOverview
@@ -389,6 +432,8 @@ public struct WorktreeStatus: Codable, Equatable, Sendable, Identifiable {
         self.availability = availability
         self.unavailableReason = unavailableReason
         self.databaseLabel = databaseLabel
+        self.manualDatabaseLabel = manualDatabaseLabel
+        self.databaseBinding = databaseBinding
         self.processes = processes
         self.containers = containers
         self.evidence = evidence

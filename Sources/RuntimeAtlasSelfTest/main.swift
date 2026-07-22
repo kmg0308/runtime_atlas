@@ -443,6 +443,11 @@ suite.run("Runtime process and container mapping") {
     let repository = try makeGitRepository(in: temporary.url)
     let paths = RuntimeAtlasPaths(baseDirectory: temporary.url.appendingPathComponent("data"))
     try ConfigurationStore(paths: paths).addRepository(path: repository.path)
+    try ConfigurationStore(paths: paths).setDatabaseLabel("manual_fallback", forWorktree: repository.path)
+    try RuntimeBindingStore(paths: paths).linkDatabase(
+        label: "reported_test",
+        worktreePath: repository.path
+    )
 
     let processExecutor = CommandExecutor { _, arguments, _ in
         if arguments.contains("-iTCP") {
@@ -476,6 +481,7 @@ suite.run("Runtime process and container mapping") {
     let status = try StatusService(
         configurationStore: ConfigurationStore(paths: paths),
         evidenceStore: EvidenceStore(paths: paths),
+        runtimeBindingStore: RuntimeBindingStore(paths: paths),
         processDetector: ProcessDetector(executor: processExecutor),
         dockerDetector: DockerDetector(
             executor: dockerExecutor,
@@ -487,6 +493,9 @@ suite.run("Runtime process and container mapping") {
     }
     try suite.equal(worktree.processes.map(\.pid), [42], "cwd should map process")
     try suite.equal(worktree.containers.map(\.name), ["web"], "mount should map container")
+    try suite.equal(worktree.databaseLabel, "reported_test", "active binding should override the display label")
+    try suite.equal(worktree.manualDatabaseLabel, "manual_fallback", "automatic binding must not mutate the manual fallback")
+    try suite.equal(worktree.databaseBinding?.label, "reported_test", "automatic binding source should remain visible")
 }
 
 suite.run("Evidence current statuses and immutable STALE view") {
@@ -573,6 +582,7 @@ suite.run("verify stdout stderr exit code and manual evidence") {
     let status = try StatusService(
         configurationStore: ConfigurationStore(paths: paths),
         evidenceStore: evidenceStore,
+        runtimeBindingStore: RuntimeBindingStore(paths: paths),
         processDetector: ProcessDetector(executor: emptyProcessExecutor),
         dockerDetector: DockerDetector(executable: nil)
     ).makeStatus()
@@ -604,6 +614,10 @@ suite.run("Korean English localization and language setting compatibility") {
     try suite.equal(english.evidenceDisplayStatusLabel(.pass), "Passed · PASS", "PASS should have a plain English label")
     try suite.equal(english.checkForUpdates, "Check for Updates", "English update controls should be available")
     try suite.equal(korean.checkForUpdates, "업데이트 확인", "Korean update controls should be available")
+    try suite.equal(korean.actions, "명령어", "the repository entry should use command wording")
+    try suite.equal(english.actions, "Commands", "English should use command wording")
+    try suite.require(korean.actionsSubtitle.contains("실행할 작업 폴더"), "repository commands should explain target selection")
+    try suite.equal(korean.commandRunLocation, "실행할 작업 폴더", "the run target picker should be explicit")
     try suite.require(
         korean.updateAvailable("1.2.3").contains("1.2.3"),
         "localized update availability should preserve the version"
@@ -720,6 +734,62 @@ suite.run("Atomic concurrent storage corruption recovery and privacy") {
     try ConfigurationStore(paths: paths).removeRepository(id: recoveredRepositoryID)
     let afterRemoval = try ConfigurationStore(paths: paths).load().value
     try suite.require(afterRemoval.databaseLabels.isEmpty, "repository removal should clear labels under its root")
+}
+
+suite.run("Runtime DB binding ownership, liveness, and atomic storage") {
+    let temporary = try TemporaryDirectory(prefix: "runtime-atlas-bindings")
+    let paths = RuntimeAtlasPaths(baseDirectory: temporary.url)
+    let store = RuntimeBindingStore(paths: paths)
+    let worktree = "/tmp/runtime-atlas-binding-worktree"
+
+    let older = try store.linkDatabase(
+        label: "older_active",
+        worktreePath: worktree,
+        ownerPID: 101,
+        registeredAt: Date(timeIntervalSince1970: 1)
+    )
+    _ = try store.linkDatabase(
+        label: "newer_stopped",
+        worktreePath: worktree,
+        ownerPID: 202,
+        registeredAt: Date(timeIntervalSince1970: 2)
+    )
+    let loaded = try store.load().value.records
+    let active = RuntimeBindingEvaluator.activeDatabaseBinding(
+        records: loaded,
+        worktreePath: worktree,
+        processIsRunning: { $0 == 101 }
+    )
+    try suite.equal(active?.id, older.id, "a stopped newer owner must not hide the active session")
+
+    try store.unlinkDatabase(worktreePath: worktree, ownerPID: 101)
+    try suite.equal(try store.load().value.records.map(\.ownerPID), [202], "owner-scoped unlink should preserve parallel sessions")
+    try store.unlinkDatabase(worktreePath: worktree)
+    let afterFullUnlink = try store.load().value.records
+    try suite.require(afterFullUnlink.isEmpty, "path-scoped unlink should remove all sessions")
+
+    do {
+        _ = try store.linkDatabase(label: "postgresql://example.invalid/private", worktreePath: worktree)
+        throw AssertionFailure(description: "a DB URL was accepted as a runtime binding label")
+    } catch DatabaseLabelError.invalid {
+        // Expected.
+    }
+
+    let failures = FailureCollector()
+    DispatchQueue.concurrentPerform(iterations: 20) { index in
+        do {
+            _ = try RuntimeBindingStore(paths: paths).linkDatabase(
+                label: "parallel_\(index)",
+                worktreePath: worktree,
+                ownerPID: Int32(index + 1)
+            )
+        } catch {
+            failures.append(error)
+        }
+    }
+    try suite.equal(failures.values, [], "concurrent runtime binding writes should not fail")
+    try suite.equal(try store.load().value.records.count, 20, "concurrent runtime binding writes should not lose sessions")
+    _ = try JSONSerialization.jsonObject(with: Data(contentsOf: paths.runtimeBindingsFile))
 }
 
 suite.run("Update version, commit, asset, and app bundle policy") {

@@ -157,6 +157,7 @@ private struct RepositorySidebarSection: View {
     @Environment(\.atlasCopy) private var copy
     let repository: RepositoryStatus
     let onRemove: () -> Void
+    @State private var showingCommands = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -192,6 +193,34 @@ private struct RepositorySidebarSection: View {
             }
             .padding(.horizontal, 12)
 
+            Button {
+                showingCommands = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "terminal")
+                    Text(copy.actions)
+                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .medium))
+                    Spacer(minLength: 4)
+                    Text("\(model.actions(for: repository.id).count)")
+                        .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .semibold, design: .rounded))
+                        .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 7)
+                .contentShape(Rectangle())
+                .background {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(RuntimeAtlasTheme.control)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .stroke(RuntimeAtlasTheme.border)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .accessibilityLabel(copy.repositoryActionsFor(repository.name))
+
             if repository.availability == .unavailable {
                 SidebarUnavailable(reason: repository.unavailableReason ?? copy.repositoryUnavailable)
                     .padding(.horizontal, 12)
@@ -212,6 +241,14 @@ private struct RepositorySidebarSection: View {
                 }
                 .padding(.horizontal, 7)
             }
+        }
+        .sheet(isPresented: $showingCommands) {
+            RepositoryCommandsSheet(
+                repository: repository,
+                initialWorktreePath: model.selectedWorktreePath
+            )
+            .environmentObject(model)
+            .environment(\.atlasCopy, copy)
         }
     }
 }

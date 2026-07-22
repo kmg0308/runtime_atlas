@@ -5,6 +5,7 @@ public struct RuntimeAtlasPaths: Sendable {
     public let directory: URL
     public let configurationFile: URL
     public let evidenceFile: URL
+    public let runtimeBindingsFile: URL
 
     public init(baseDirectory: URL? = nil) {
         let resolvedDirectory: URL
@@ -26,6 +27,7 @@ public struct RuntimeAtlasPaths: Sendable {
         directory = resolvedDirectory.standardizedFileURL
         configurationFile = directory.appendingPathComponent("configuration.json")
         evidenceFile = directory.appendingPathComponent("evidence.json")
+        runtimeBindingsFile = directory.appendingPathComponent("runtime-bindings.json")
     }
 }
 
@@ -339,6 +341,109 @@ public struct EvidenceStore: Sendable {
         try file.update { document in
             document.records.append(record)
         }
+    }
+}
+
+public enum RuntimeBindingError: LocalizedError, Equatable, Sendable {
+    case invalidOwnerPID
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidOwnerPID:
+            return "Owner PID must be a positive integer."
+        }
+    }
+}
+
+public struct RuntimeBindingStore: Sendable {
+    private let file: AtomicJSONFile<RuntimeBindingDocument>
+
+    public init(paths: RuntimeAtlasPaths = RuntimeAtlasPaths()) {
+        file = AtomicJSONFile(
+            fileURL: paths.runtimeBindingsFile,
+            emptyDocument: { RuntimeBindingDocument() },
+            damagedFileDescription: "The runtime binding file is damaged; automatic resource links are hidden until the next registration."
+        )
+    }
+
+    public func load() throws -> StoreLoad<RuntimeBindingDocument> {
+        try file.load()
+    }
+
+    @discardableResult
+    public func linkDatabase(
+        label: String,
+        worktreePath: String,
+        ownerPID: Int32? = nil,
+        registeredAt: Date = Date()
+    ) throws -> RuntimeBindingRecord {
+        let normalizedLabel = try DatabaseLabelValidator.normalized(label)
+        guard let normalizedLabel else { throw DatabaseLabelError.invalid }
+        if let ownerPID, ownerPID <= 0 { throw RuntimeBindingError.invalidOwnerPID }
+
+        let canonicalPath = PathUtilities.canonical(worktreePath)
+        let record = RuntimeBindingRecord(
+            worktreePath: canonicalPath,
+            label: normalizedLabel,
+            ownerPID: ownerPID,
+            registeredAt: registeredAt
+        )
+        try file.update { document in
+            document.records.removeAll {
+                $0.kind == .database
+                    && PathUtilities.canonical($0.worktreePath) == canonicalPath
+                    && $0.ownerPID == ownerPID
+            }
+            document.records.append(record)
+        }
+        return record
+    }
+
+    public func unlinkDatabase(worktreePath: String, ownerPID: Int32? = nil) throws {
+        let canonicalPath = PathUtilities.canonical(worktreePath)
+        try file.update { document in
+            document.records.removeAll { record in
+                guard record.kind == .database,
+                      PathUtilities.canonical(record.worktreePath) == canonicalPath else {
+                    return false
+                }
+                guard let ownerPID else { return true }
+                return record.ownerPID == ownerPID
+            }
+        }
+    }
+}
+
+public enum RuntimeBindingEvaluator {
+    public static func activeDatabaseBinding(
+        records: [RuntimeBindingRecord],
+        worktreePath: String
+    ) -> RuntimeBindingRecord? {
+        activeDatabaseBinding(
+            records: records,
+            worktreePath: worktreePath,
+            processIsRunning: processIsRunning
+        )
+    }
+
+    public static func activeDatabaseBinding(
+        records: [RuntimeBindingRecord],
+        worktreePath: String,
+        processIsRunning: (Int32) -> Bool
+    ) -> RuntimeBindingRecord? {
+        let canonicalPath = PathUtilities.canonical(worktreePath)
+        return records
+            .filter {
+                $0.kind == .database
+                    && PathUtilities.canonical($0.worktreePath) == canonicalPath
+                    && ($0.ownerPID.map(processIsRunning) ?? true)
+            }
+            .max { $0.registeredAt < $1.registeredAt }
+    }
+
+    private static func processIsRunning(_ pid: Int32) -> Bool {
+        if Darwin.kill(pid, 0) == 0 { return true }
+        return errno == EPERM
     }
 }
 

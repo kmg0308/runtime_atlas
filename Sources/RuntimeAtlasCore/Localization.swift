@@ -108,27 +108,37 @@ public struct AtlasCopy: Sendable {
             korean: "결과는 바꾸지 않습니다. 이전 코드의 기록은 이전 코드 기준(STALE)으로 표시합니다."
         )
     }
-    public var actions: String { value(english: "Actions", korean: "작업 버튼") }
+    public var actions: String { value(english: "Commands", korean: "명령어") }
     public var actionsSubtitle: String {
-        value(english: "Run repository commands without retyping them in Terminal.", korean: "터미널에 매번 입력하던 저장소 명령을 버튼으로 실행합니다.")
+        value(
+            english: "Configure commands once for this repository, then choose the working folder where they run.",
+            korean: "이 저장소에 명령어를 한 번 설정하고, 실행할 작업 폴더만 선택합니다."
+        )
     }
-    public var configureActions: String { value(english: "Configure Actions", korean: "작업 설정") }
-    public var noActions: String { value(english: "No actions configured", korean: "설정한 작업 없음") }
+    public var configureActions: String { value(english: "Configure Commands", korean: "명령어 설정") }
+    public func repositoryActionsFor(_ name: String) -> String {
+        value(english: "\(name) Commands", korean: "\(name) 명령어")
+    }
+    public var noActions: String { value(english: "No commands configured", korean: "설정한 명령어 없음") }
     public var noActionsHelp: String {
-        value(english: "Add only the commands you use repeatedly for this repository.", korean: "이 저장소에서 반복해서 쓰는 명령만 추가하세요.")
+        value(
+            english: "Add only commands that belong to this repository. Every working folder shares the same list.",
+            korean: "이 저장소에서 공통으로 쓰는 명령어만 추가하세요. 모든 작업 폴더가 같은 목록을 공유합니다."
+        )
     }
-    public var addAction: String { value(english: "Add Action", korean: "작업 추가") }
-    public var editAction: String { value(english: "Edit Action", korean: "작업 편집") }
-    public var actionName: String { value(english: "Button name", korean: "버튼 이름") }
+    public var addAction: String { value(english: "Add Command", korean: "명령어 추가") }
+    public var editAction: String { value(english: "Edit Command", korean: "명령어 편집") }
+    public var actionName: String { value(english: "Command name", korean: "명령어 이름") }
     public var commandTemplate: String { value(english: "Command", korean: "명령어") }
     public var actionKind: String { value(english: "How it runs", korean: "실행 방식") }
     public var oneTimeTask: String { value(english: "Run once", korean: "한 번 실행") }
     public var runningSession: String { value(english: "Keep running", korean: "계속 실행") }
     public var runFrom: String { value(english: "Run from", korean: "실행 위치") }
+    public var commandRunLocation: String { value(english: "Working folder to run in", korean: "실행할 작업 폴더") }
     public var selectedWorktreeLocation: String { value(english: "Selected working folder", korean: "선택한 작업 폴더") }
     public var repositoryRootLocation: String { value(english: "Main repository folder", korean: "기준 저장소 폴더") }
     public var destructiveAction: String { value(english: "Can delete or overwrite data", korean: "데이터를 삭제하거나 덮어쓸 수 있음") }
-    public var effects: String { value(english: "What this changes (one per line)", korean: "이 작업이 바꾸는 것 (한 줄에 하나)") }
+    public var effects: String { value(english: "What this command changes (one per line)", korean: "이 명령어가 바꾸는 것 (한 줄에 하나)") }
     public var inputs: String { value(english: "Inputs", korean: "실행 전 입력") }
     public var addInput: String { value(english: "Add Input", korean: "입력 추가") }
     public var inputKey: String { value(english: "Placeholder key", korean: "치환 이름") }
@@ -154,18 +164,18 @@ public struct AtlasCopy: Sendable {
         value(english: "Review the exact command and effects. This confirmation is required every time.", korean: "실제 명령과 영향을 확인하세요. 이 확인은 실행할 때마다 필요합니다.")
     }
     public var exactCommand: String { value(english: "Exact command", korean: "실제 실행 명령") }
-    public var actionSaved: String { value(english: "Action saved.", korean: "작업을 저장했습니다.") }
-    public var actionSaveFailed: String { value(english: "Action could not be saved.", korean: "작업을 저장하지 못했습니다.") }
-    public var actionRemoveFailed: String { value(english: "Action could not be removed.", korean: "작업을 제거하지 못했습니다.") }
-    public var actionLaunchFailed: String { value(english: "Action could not be started.", korean: "작업을 시작하지 못했습니다.") }
-    public var deleteAction: String { value(english: "Delete Action", korean: "작업 삭제") }
+    public var actionSaved: String { value(english: "Command saved.", korean: "명령어를 저장했습니다.") }
+    public var actionSaveFailed: String { value(english: "Command could not be saved.", korean: "명령어를 저장하지 못했습니다.") }
+    public var actionRemoveFailed: String { value(english: "Command could not be removed.", korean: "명령어를 제거하지 못했습니다.") }
+    public var actionLaunchFailed: String { value(english: "Command could not be started.", korean: "명령어를 시작하지 못했습니다.") }
+    public var deleteAction: String { value(english: "Delete Command", korean: "명령어 삭제") }
     public var sessionCloseNotice: String {
-        value(english: "Runtime Atlas stops sessions it started when the app quits.", korean: "Runtime Atlas가 시작한 계속 실행 작업은 앱을 종료하면 함께 중지됩니다.")
+        value(english: "Runtime Atlas stops commands it kept running when the app quits.", korean: "Runtime Atlas가 계속 실행한 명령어는 앱을 종료하면 함께 중지됩니다.")
     }
     public func customActionError(_ error: CustomActionError) -> String {
         guard language == .korean else { return error.localizedDescription }
         return switch error {
-        case .invalidName: "작업 이름은 1~60자로 입력하세요."
+        case .invalidName: "명령어 이름은 1~60자로 입력하세요."
         case .invalidTemplate(let reason): "명령어가 올바르지 않습니다: \(reason)"
         case .invalidInput(let reason): "입력 설정이 올바르지 않습니다: \(reason)"
         case .missingValue(let key): "{{\(key)}} 값을 입력하세요."
@@ -195,9 +205,21 @@ public struct AtlasCopy: Sendable {
     }
     public var logicalDBDescription: String {
         value(
-            english: "A name only. Runtime Atlas never reads or stores a DB URL or credential.",
-            korean: "이름만 저장합니다. Runtime Atlas는 DB URL이나 인증 정보를 읽거나 저장하지 않습니다."
+            english: "Projects can report the current name automatically; this field is a manual fallback. DB URLs and credentials are never stored.",
+            korean: "프로젝트가 현재 이름을 자동으로 알려줄 수 있으며, 이 입력은 수동 대체값입니다. DB URL이나 인증 정보는 저장하지 않습니다."
         )
+    }
+    public var automaticDBLinked: String {
+        value(english: "Current DB reported automatically", korean: "현재 DB 자동 연결됨")
+    }
+    public func automaticDBDetails(_ label: String) -> String {
+        value(
+            english: "The repository's development command reported \(label). The manual name below remains unchanged.",
+            korean: "저장소의 개발 명령이 \(label)을(를) 알려줬습니다. 아래 수동 이름은 그대로 유지됩니다."
+        )
+    }
+    public func automaticDBBadge(_ label: String) -> String {
+        value(english: "DB AUTO  \(label)", korean: "DB 자동  \(label)")
     }
     public var logicalDBPlaceholder: String { value(english: "e.g. refactoring_test", korean: "예: refactoring_test") }
     public var save: String { value(english: "Save", korean: "저장") }
@@ -532,6 +554,7 @@ public struct AtlasCopy: Sendable {
         "Runtime Atlas local data is busy or cannot be locked.": "Runtime Atlas 로컬 데이터가 사용 중이거나 잠글 수 없습니다.",
         "Runtime Atlas could not save local data.": "Runtime Atlas가 로컬 데이터를 저장하지 못했습니다.",
         "The repository configuration file is damaged; an empty configuration is being used until the next save.": "저장소 설정 파일이 손상되어 다음 저장 전까지 빈 설정을 사용합니다.",
-        "The evidence file is damaged; no history is shown until the next evidence record is saved.": "증거 파일이 손상되어 다음 증거를 저장할 때까지 기록을 표시하지 않습니다."
+        "The evidence file is damaged; no history is shown until the next evidence record is saved.": "증거 파일이 손상되어 다음 증거를 저장할 때까지 기록을 표시하지 않습니다.",
+        "The runtime binding file is damaged; automatic resource links are hidden until the next registration.": "실행 연결 파일이 손상되어 다음 등록 전까지 자동 자원 연결을 표시하지 않습니다."
     ]
 }

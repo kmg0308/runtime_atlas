@@ -25,6 +25,10 @@ private struct RuntimeAtlasCLI {
             return record(arguments: Array(arguments.dropFirst()))
         case "actions":
             return actions(arguments: Array(arguments.dropFirst()))
+        case "link":
+            return link(arguments: Array(arguments.dropFirst()))
+        case "unlink":
+            return unlink(arguments: Array(arguments.dropFirst()))
         case "help", "--help", "-h":
             writeOutput(usageText)
             return CLIExit.success
@@ -32,6 +36,97 @@ private struct RuntimeAtlasCLI {
             writeError("Unknown command: \(command)\n\n\(usageText)")
             return CLIExit.usage
         }
+    }
+
+    private func link(arguments: [String]) -> Int32 {
+        let options: BindingOptions
+        do {
+            options = try parseBindingOptions(arguments, requiresLabel: true)
+        } catch {
+            writeError(linkUsage)
+            return CLIExit.usage
+        }
+
+        do {
+            let record = try RuntimeBindingStore().linkDatabase(
+                label: options.label ?? "",
+                worktreePath: options.worktreePath,
+                ownerPID: options.ownerPID
+            )
+            writeOutput("Linked database \(record.label) to \(record.worktreePath).\n")
+            return CLIExit.success
+        } catch let error as LocalizedError {
+            writeError("runtime-atlas: \(error.errorDescription ?? "Database binding could not be saved.")\n")
+            return CLIExit.failure
+        } catch {
+            writeError("runtime-atlas: Database binding could not be saved.\n")
+            return CLIExit.failure
+        }
+    }
+
+    private func unlink(arguments: [String]) -> Int32 {
+        let options: BindingOptions
+        do {
+            options = try parseBindingOptions(arguments, requiresLabel: false)
+        } catch {
+            writeError(unlinkUsage)
+            return CLIExit.usage
+        }
+
+        do {
+            try RuntimeBindingStore().unlinkDatabase(
+                worktreePath: options.worktreePath,
+                ownerPID: options.ownerPID
+            )
+            writeOutput("Unlinked database from \(PathUtilities.canonical(options.worktreePath)).\n")
+            return CLIExit.success
+        } catch {
+            writeError("runtime-atlas: Database binding could not be removed.\n")
+            return CLIExit.failure
+        }
+    }
+
+    private func parseBindingOptions(_ arguments: [String], requiresLabel: Bool) throws -> BindingOptions {
+        guard arguments.first == "database" else { throw CLIUsageError.invalidBindingArguments }
+        var label: String?
+        var worktreePath = FileManager.default.currentDirectoryPath
+        var ownerPID: Int32?
+        var index = 1
+
+        while index < arguments.count {
+            let option = arguments[index]
+            guard ["--label", "--worktree", "--owner-pid"].contains(option),
+                  index + 1 < arguments.count else {
+                throw CLIUsageError.invalidBindingArguments
+            }
+            let value = arguments[index + 1]
+            switch option {
+            case "--label":
+                label = value
+            case "--worktree":
+                guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    throw CLIUsageError.invalidBindingArguments
+                }
+                worktreePath = value
+            case "--owner-pid":
+                guard let parsed = Int32(value), parsed > 0 else {
+                    throw CLIUsageError.invalidBindingArguments
+                }
+                ownerPID = parsed
+            default:
+                break
+            }
+            index += 2
+        }
+
+        if requiresLabel {
+            guard let label, !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw CLIUsageError.invalidBindingArguments
+            }
+        } else if label != nil {
+            throw CLIUsageError.invalidBindingArguments
+        }
+        return BindingOptions(label: label, worktreePath: worktreePath, ownerPID: ownerPID)
     }
 
     private func actions(arguments: [String]) -> Int32 {
@@ -196,6 +291,14 @@ private struct RuntimeAtlasCLI {
         "Usage: runtime-atlas record --kind browser|manual --status PASS|FAIL|BLOCKED|PENDING --note <text> [--viewport <text>]\n"
     }
 
+    private var linkUsage: String {
+        "Usage: runtime-atlas link database --label <display-name> [--worktree <path>] [--owner-pid <pid>]\n"
+    }
+
+    private var unlinkUsage: String {
+        "Usage: runtime-atlas unlink database [--worktree <path>] [--owner-pid <pid>]\n"
+    }
+
     private var usageText: String {
         """
         Runtime Atlas reads local worktree/runtime state and records SHA-bound evidence.
@@ -203,6 +306,8 @@ private struct RuntimeAtlasCLI {
         Usage:
           runtime-atlas status --json
           runtime-atlas actions --json
+          (linkUsage.trimmingCharacters(in: .newlines))
+          (unlinkUsage.trimmingCharacters(in: .newlines))
           runtime-atlas verify -- <command and args>
           \(recordUsage.trimmingCharacters(in: .newlines))
 
@@ -224,11 +329,23 @@ private struct RecordOptions {
     let viewport: String?
 }
 
+private struct BindingOptions {
+    let label: String?
+    let worktreePath: String
+    let ownerPID: Int32?
+}
+
 private enum CLIUsageError: LocalizedError {
     case invalidRecordArguments
+    case invalidBindingArguments
 
     var errorDescription: String? {
-        "Invalid record arguments."
+        switch self {
+        case .invalidRecordArguments:
+            "Invalid record arguments."
+        case .invalidBindingArguments:
+            "Invalid runtime binding arguments."
+        }
     }
 }
 

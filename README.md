@@ -13,6 +13,7 @@ Runtime Atlas is a local-first native macOS app that shows which code is checked
 - Map LISTEN TCP ports to a worktree when the process cwd is inside it.
 - Map running Docker containers when a host mount is inside the worktree; a missing CLI, stopped daemon, or permission failure stays a local partial error.
 - Store only a user-entered logical DB label such as `refactoring_test`.
+- Accept a project-reported DB display name through a provider-neutral CLI binding without reading its URL or credentials.
 - Turn repeated repository commands into local buttons, including one-time tasks and app-owned running sessions.
 - Record command, browser, and manual evidence against the exact worktree SHA; old-SHA evidence is displayed as `STALE` without changing the original record.
 - Export the same state as stable JSON through `runtime-atlas status --json`.
@@ -25,7 +26,7 @@ The first launch follows the primary macOS language (`ko` selects Korean; other 
 
 ## Privacy boundary
 
-Runtime Atlas reads Git metadata, `lsof` LISTEN results, process cwd where macOS permits it, and Docker container/mount/port metadata. It does **not** read `.env` files, third-party process environment variables, DB URLs, passwords, tokens, or database contents. Verification command stdout/stderr is passed directly to your terminal and is never stored. Action output is kept only in limited app memory while the app is open. Action names, command templates, input definitions, and effect descriptions are stored locally, so do not put secrets in them. Common credential-shaped command arguments, note fragments, and URLs are redacted before evidence is written; do not intentionally put secrets in commands or notes. Network access is limited to checking and downloading releases from the fixed `kmg0308/runtime_atlas` GitHub repository.
+Runtime Atlas reads Git metadata, `lsof` LISTEN results, process cwd where macOS permits it, and Docker container/mount/port metadata. It does **not** read `.env` files, third-party process environment variables, DB URLs, passwords, tokens, or database contents. Verification command stdout/stderr is passed directly to your terminal and is never stored. Command output is kept only in limited app memory while the app is open. Command names, templates, input definitions, and effect descriptions are stored locally, so do not put secrets in them. Common credential-shaped command arguments, note fragments, and URLs are redacted before evidence is written; do not intentionally put secrets in commands or notes. Network access is limited to checking and downloading releases from the fixed `kmg0308/runtime_atlas` GitHub repository.
 
 Configuration and evidence are user-only, atomically replaced JSON files under:
 
@@ -35,11 +36,11 @@ Configuration and evidence are user-only, atomically replaced JSON files under:
 
 There is no account, telemetry, cloud sync, server, AI agent, background daemon, or silent update installation.
 
-## Repository action buttons
+## Repository commands
 
-Open a worktree and choose **Configure Actions** in **Actions**. Runtime Atlas intentionally supports only one command with separate arguments—no pipelines, redirects, `&&`, shell expansion, schedules, or workflow builder.
+Choose **Commands** once under a repository in the sidebar. Command definitions belong to that repository and are not repeated on every worktree screen. The currently selected worktree is the default run location; choose a different working folder in the command sheet when needed. Runtime Atlas intentionally supports only one command with separate arguments—no pipelines, redirects, `&&`, shell expansion, schedules, or workflow builder.
 
-For a local server, create a **Keep running** action such as `npm run dev`. Runtime Atlas loads the normal login-shell environment, starts it from the selected worktree, shows limited live output, and can stop only the process group that this app started. Closing Runtime Atlas stops its running sessions.
+For a local server, create a **Keep running** command such as `npm run dev`. Runtime Atlas loads the normal login-shell environment, starts it from the selected worktree, shows limited live output, and can stop only the process group that this app started. Closing Runtime Atlas stops its running sessions.
 
 For commands that need a value, add a whole-argument placeholder. For example:
 
@@ -99,6 +100,13 @@ Run commands from inside the worktree they belong to:
 runtime-atlas status --json
 runtime-atlas actions --json
 
+runtime-atlas link database \
+  --label local_project_test \
+  --worktree "$PWD" \
+  --owner-pid "$$"
+
+runtime-atlas unlink database --worktree "$PWD" --owner-pid "$$"
+
 runtime-atlas verify -- swift test
 
 runtime-atlas record \
@@ -109,6 +117,8 @@ runtime-atlas record \
 ```
 
 `verify` streams the child command's stdout/stderr, returns its original exit code, and records `PASS` for exit 0 or `FAIL` otherwise. `record` accepts `browser` or `manual` and the explicit statuses `PASS`, `FAIL`, `BLOCKED`, or `PENDING`.
+
+`link database` is an optional integration contract for repository development scripts. It stores only the canonical worktree path, display label, optional owner PID, and registration time in `runtime-bindings.json`. Multiple sessions can register the same worktree independently; owner-scoped `unlink` removes only its own session. If no active binding exists, the app keeps using the manual DB display name.
 
 ## Automatic Release from main
 

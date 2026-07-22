@@ -174,6 +174,27 @@ test "$(cat "$QA_PARENT/stderr")" = "atlas-cli-error"
 (cd "$QA_REPO" && RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" record \
     --kind browser --status PENDING --note 'Browser evidence pending')
 
+RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" link database \
+    --label cli_test --worktree "$QA_REPO"
+python3 - "$QA_DATA/runtime-bindings.json" "$QA_REPO" <<'PY'
+import json, pathlib, sys
+data = json.loads(pathlib.Path(sys.argv[1]).read_text())
+records = data.get("records", [])
+if len(records) != 1 or records[0].get("label") != "cli_test" or records[0].get("worktreePath") != sys.argv[2]:
+    raise SystemExit(f"runtime binding mismatch: {records}")
+PY
+RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" unlink database --worktree "$QA_REPO"
+test "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["records"]))' "$QA_DATA/runtime-bindings.json")" -eq 0
+
+set +e
+RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" link database \
+    --label 'postgresql://example.invalid/private' --worktree "$QA_REPO" \
+    >"$QA_PARENT/binding-privacy-stdout" 2>"$QA_PARENT/binding-privacy-stderr"
+BINDING_PRIVACY_EXIT=$?
+set -e
+test "$BINDING_PRIVACY_EXIT" -ne 0
+test ! -s "$QA_PARENT/binding-privacy-stdout"
+
 set +e
 (cd "$QA_PARENT" && RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" record \
     --kind manual --status PENDING --note 'Outside worktree' \

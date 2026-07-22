@@ -51,12 +51,6 @@ struct WorktreeDetailView: View {
                     )
                 }
 
-                if let repository = model.selectedRepository {
-                    SectionCard(title: copy.actions, subtitle: copy.actionsSubtitle) {
-                        CustomActionsSection(repository: repository, worktree: worktree)
-                    }
-                }
-
                 SectionCard(
                     title: copy.evidence,
                     subtitle: copy.evidenceSubtitle
@@ -186,6 +180,15 @@ private struct CodeSection: View {
             }
 
             VStack(alignment: .leading, spacing: 7) {
+                if let binding = worktree.databaseBinding {
+                    InlineNotice(
+                        icon: "link.circle.fill",
+                        title: copy.automaticDBLinked,
+                        message: copy.automaticDBDetails(binding.label),
+                        color: RuntimeAtlasTheme.mint
+                    )
+                }
+
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(copy.logicalDBLabel)
@@ -210,13 +213,13 @@ private struct CodeSection: View {
             }
         }
         .onAppear {
-            databaseLabel = worktree.databaseLabel ?? ""
+            databaseLabel = worktree.manualDatabaseLabel ?? ""
         }
-        .onChange(of: worktree.databaseLabel) { value in
+        .onChange(of: worktree.manualDatabaseLabel) { value in
             databaseLabel = value ?? ""
         }
         .onChange(of: worktree.path) { _ in
-            databaseLabel = worktree.databaseLabel ?? ""
+            databaseLabel = worktree.manualDatabaseLabel ?? ""
         }
     }
 
@@ -298,7 +301,9 @@ private struct RuntimeMapSection: View {
                 title: URL(fileURLWithPath: worktree.path).lastPathComponent,
                 detail: worktree.detached ? copy.detachedAt(worktree.shortSHA) : "\(worktree.branch ?? copy.unknownBranch) @ \(worktree.shortSHA)",
                 color: RuntimeAtlasTheme.accent,
-                badges: worktree.databaseLabel.map { ["DB  \($0)"] } ?? []
+                badges: worktree.databaseBinding.map { [copy.automaticDBBadge($0.label)] }
+                    ?? worktree.databaseLabel.map { ["DB  \($0)"] }
+                    ?? []
             )
 
             if processDiscovery.state == .unavailable {

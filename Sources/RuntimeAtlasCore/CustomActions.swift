@@ -9,7 +9,7 @@ public enum CustomActionError: LocalizedError, Equatable, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidName: "Action name must be 1-60 characters."
+        case .invalidName: "Command name must be 1-60 characters."
         case .invalidTemplate(let reason): "Command is invalid: \(reason)"
         case .invalidInput(let reason): "Input is invalid: \(reason)"
         case .missingValue(let key): "A value is required for {{\(key)}}."
@@ -32,7 +32,7 @@ public enum CustomActionPlanner {
         let persistedText = [action.name, action.commandTemplate] + action.effects
             + action.inputs.flatMap { [$0.key, $0.label, $0.flagArgument ?? ""] }
         guard !persistedText.contains(where: PrivacySanitizer.containsSensitiveContent) else {
-            throw CustomActionError.invalidInput("credentials and URLs must not be stored in an action")
+            throw CustomActionError.invalidInput("credentials and URLs must not be stored in a command")
         }
         guard !action.commandTemplate.isEmpty, action.commandTemplate.count <= 500 else {
             throw CustomActionError.invalidTemplate("use 1-500 characters")
