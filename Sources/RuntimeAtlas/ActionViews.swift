@@ -38,30 +38,47 @@ struct WorktreeCommandsSection: View {
 
     @ViewBuilder private func compactAction(_ action: CustomActionDefinition) -> some View {
         let state = runner.state(for: action, worktreePath: worktree.path)
+        let managedRunning = runner.isRunning(action, worktreePath: worktree.path)
+        let externalRunning = CustomActionRuntimeEvaluator.isExternallyRunning(
+            action,
+            mappedProcesses: worktree.processes,
+            isManagedByRuntimeAtlas: managedRunning
+        )
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 5) {
                 Button {
-                    if runner.isRunning(action, worktreePath: worktree.path) {
+                    if managedRunning {
                         runner.stop(action: action, worktreePath: worktree.path)
+                    } else if externalRunning {
+                        model.operationMessage = copy.externalRunningHelp
                     } else {
                         prepare(action)
                     }
                 } label: {
                     HStack(spacing: 7) {
-                        Image(systemName: action.kind == .session ? "play.fill" : "terminal.fill")
+                        Image(systemName: managedRunning
+                            ? "stop.fill"
+                            : (externalRunning
+                                ? "dot.radiowaves.left.and.right"
+                                : (action.kind == .session ? "play.fill" : "terminal.fill")))
                         Text(action.name)
                             .lineLimit(1)
                         Spacer(minLength: 3)
-                        if runner.isRunning(action, worktreePath: worktree.path) {
-                            Text(copy.stop)
+                        if managedRunning {
+                            Text(copy.running)
                                 .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .semibold))
                                 .foregroundStyle(RuntimeAtlasTheme.amber)
+                        } else if externalRunning {
+                            Text(copy.runningOutsideApp)
+                                .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .semibold))
+                                .foregroundStyle(RuntimeAtlasTheme.mint)
                         }
                     }
                 }
-                .buttonStyle(CompactCommandButtonStyle(running: runner.isRunning(action, worktreePath: worktree.path)))
+                .buttonStyle(CompactCommandButtonStyle(running: managedRunning || externalRunning))
                 .disabled(worktree.availability != .available)
-                .accessibilityLabel(commandAccessibilityLabel(action))
+                .accessibilityLabel(commandAccessibilityLabel(action, externalRunning: externalRunning))
+                .help(externalRunning ? copy.externalRunningHelp : "")
 
                 if let state, !state.output.isEmpty {
                     Button {
@@ -85,14 +102,21 @@ struct WorktreeCommandsSection: View {
                     .foregroundStyle(RuntimeAtlasTheme.red)
                     .lineLimit(1)
             }
+            if state?.evidenceSaveFailed == true {
+                Text(copy.evidenceSaveFailed)
+                    .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .medium))
+                    .foregroundStyle(RuntimeAtlasTheme.red)
+                    .lineLimit(2)
+            }
         }
         .accessibilityElement(children: .contain)
     }
 
-    private func commandAccessibilityLabel(_ action: CustomActionDefinition) -> String {
+    private func commandAccessibilityLabel(_ action: CustomActionDefinition, externalRunning: Bool) -> String {
         if runner.isRunning(action, worktreePath: worktree.path) {
             return "\(action.name), \(copy.running), \(copy.stop)"
         }
+        if externalRunning { return "\(action.name), \(copy.runningOutsideApp)" }
         return "\(action.name), \(action.kind == .session ? copy.start : copy.run)"
     }
 
@@ -250,8 +274,44 @@ private struct ActionEditorView: View {
                         Text(copy.commandPlaceholderHelp).font(.system(size: RuntimeAtlasTheme.Typography.caption)).foregroundStyle(RuntimeAtlasTheme.secondaryText)
                     }
                     Picker(copy.actionKind, selection: $draft.kind) { Text(copy.oneTimeTask).tag(CustomActionKind.task); Text(copy.runningSession).tag(CustomActionKind.session) }.pickerStyle(.segmented)
+                        .onChange(of: draft.kind) { kind in
+                            if kind == .session {
+                                draft.detectsRunningWorktreeListener = draft.workingDirectory == .selectedWorktree
+                                draft.recordsVerificationEvidence = false
+                            } else {
+                                draft.detectsRunningWorktreeListener = false
+                            }
+                        }
                     Picker(copy.runFrom, selection: $draft.workingDirectory) { Text(copy.selectedWorktreeLocation).tag(CustomActionWorkingDirectory.selectedWorktree); Text(copy.repositoryRootLocation).tag(CustomActionWorkingDirectory.repositoryRoot) }
-                    Toggle(copy.destructiveAction, isOn: Binding(get: { draft.risk == .destructive }, set: { draft.risk = $0 ? .destructive : .normal }))
+                        .onChange(of: draft.workingDirectory) { directory in
+                            if directory == .repositoryRoot {
+                                draft.detectsRunningWorktreeListener = false
+                            }
+                        }
+                    Toggle(copy.destructiveAction, isOn: Binding(
+                        get: { draft.risk == .destructive },
+                        set: {
+                            draft.risk = $0 ? .destructive : .normal
+                            if $0 { draft.recordsVerificationEvidence = false }
+                        }
+                    ))
+                    if draft.kind == .session && draft.workingDirectory == .selectedWorktree {
+                        labeled(copy.detectExternalListener) {
+                            Toggle(copy.detectExternalListener, isOn: $draft.detectsRunningWorktreeListener)
+                                .labelsHidden()
+                            Text(copy.detectExternalListenerHelp)
+                                .font(.system(size: RuntimeAtlasTheme.Typography.caption))
+                                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
+                        }
+                    } else if draft.risk == .normal {
+                        labeled(copy.recordVerificationEvidence) {
+                            Toggle(copy.recordVerificationEvidence, isOn: $draft.recordsVerificationEvidence)
+                                .labelsHidden()
+                            Text(copy.recordVerificationEvidenceHelp)
+                                .font(.system(size: RuntimeAtlasTheme.Typography.caption))
+                                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
+                        }
+                    }
                     labeled(copy.effects) { TextEditor(text: $effectsText).frame(minHeight: 70).font(.system(size: RuntimeAtlasTheme.Typography.body)) }
                     HStack { Text(copy.inputs).font(.system(size: RuntimeAtlasTheme.Typography.sectionTitle, weight: .semibold)); Spacer(); Button(copy.addInput) { draft.inputs.append(CustomActionInputDefinition(key: "input\(draft.inputs.count + 1)", label: "", kind: .text)) } }
                     ForEach($draft.inputs) { $input in

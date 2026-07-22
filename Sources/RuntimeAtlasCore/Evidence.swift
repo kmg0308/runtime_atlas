@@ -209,6 +209,102 @@ public struct VerificationRunResult: Sendable {
     }
 }
 
+public struct CommandEvidenceContext: Equatable, Sendable {
+    public let command: [String]
+    public let worktreePath: String
+    public let branch: String?
+    public let sha: String
+    public let dirty: Bool
+    public let startedAt: Date
+
+    public init(
+        command: [String],
+        worktreePath: String,
+        branch: String?,
+        sha: String,
+        dirty: Bool,
+        startedAt: Date
+    ) {
+        self.command = command
+        self.worktreePath = worktreePath
+        self.branch = branch
+        self.sha = sha
+        self.dirty = dirty
+        self.startedAt = startedAt
+    }
+}
+
+public struct CommandEvidenceRecorder: Sendable {
+    private let gitInspector: GitInspector
+    private let evidenceStore: EvidenceStore
+
+    public init(
+        gitInspector: GitInspector = GitInspector(),
+        evidenceStore: EvidenceStore = EvidenceStore()
+    ) {
+        self.gitInspector = gitInspector
+        self.evidenceStore = evidenceStore
+    }
+
+    @discardableResult
+    public func prepare(
+        command: [String],
+        startedAt: Date,
+        currentDirectory: URL
+    ) throws -> CommandEvidenceContext {
+        guard !command.isEmpty else { throw EvidenceRecordingError.emptyCommand }
+        let worktree = try gitInspector.currentWorktree(at: currentDirectory)
+        return CommandEvidenceContext(
+            command: PrivacySanitizer.command(command),
+            worktreePath: worktree.path,
+            branch: worktree.branch,
+            sha: worktree.sha,
+            dirty: worktree.dirty,
+            startedAt: startedAt
+        )
+    }
+
+    @discardableResult
+    public func record(
+        context: CommandEvidenceContext,
+        exitCode: Int32,
+        endedAt: Date = Date()
+    ) throws -> EvidenceRecord {
+        let record = EvidenceRecord(
+            kind: .command,
+            status: exitCode == 0 ? .pass : .fail,
+            worktreePath: context.worktreePath,
+            branch: context.branch,
+            sha: context.sha,
+            dirty: context.dirty,
+            command: context.command,
+            exitCode: exitCode,
+            startedAt: context.startedAt,
+            endedAt: endedAt,
+            note: nil,
+            viewport: nil
+        )
+        try evidenceStore.append(record)
+        return record
+    }
+
+    @discardableResult
+    public func record(
+        command: [String],
+        exitCode: Int32,
+        startedAt: Date,
+        endedAt: Date = Date(),
+        currentDirectory: URL
+    ) throws -> EvidenceRecord {
+        let context = try prepare(
+            command: command,
+            startedAt: startedAt,
+            currentDirectory: currentDirectory
+        )
+        return try record(context: context, exitCode: exitCode, endedAt: endedAt)
+    }
+}
+
 public struct VerificationRunner: Sendable {
     private let gitInspector: GitInspector
     private let evidenceStore: EvidenceStore

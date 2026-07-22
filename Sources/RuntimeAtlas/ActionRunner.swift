@@ -20,6 +20,7 @@ struct ActionRunState: Equatable {
     var output: String
     var displayCommand: String
     var startedAt: Date
+    var evidenceSaveFailed: Bool = false
 }
 
 @MainActor
@@ -28,10 +29,15 @@ final class ActionRunner: ObservableObject {
     private var processes: [ActionRunKey: Process] = [:]
     private var sessions: [ActionRunKey: ActionSessionRecord] = [:]
     private let sessionStore: ActionSessionStore
+    private let evidenceRecorder: CommandEvidenceRecorder
     var refreshHandler: (() -> Void)?
 
-    init(sessionStore: ActionSessionStore = ActionSessionStore()) {
+    init(
+        sessionStore: ActionSessionStore = ActionSessionStore(),
+        evidenceRecorder: CommandEvidenceRecorder = CommandEvidenceRecorder()
+    ) {
         self.sessionStore = sessionStore
+        self.evidenceRecorder = evidenceRecorder
     }
 
     func state(for action: CustomActionDefinition, worktreePath: String) -> ActionRunState? {
@@ -47,6 +53,15 @@ final class ActionRunner: ObservableObject {
         let key = ActionRunKey(actionID: action.id, worktreePath: PathUtilities.canonical(worktreePath))
         guard processes[key] == nil, sessions[key] == nil else { return }
 
+        let startedAt = Date()
+        let evidenceContext = try action.recordsVerificationEvidence
+            ? evidenceRecorder.prepare(
+                command: [plan.executable] + plan.arguments,
+                startedAt: startedAt,
+                currentDirectory: URL(fileURLWithPath: plan.currentDirectory, isDirectory: true)
+            )
+            : nil
+
         let process = Process()
         let identityToken = UUID()
         process.executableURL = try supervisorURL()
@@ -59,7 +74,7 @@ final class ActionRunner: ObservableObject {
         process.standardOutput = outputPipe
         process.standardError = errorPipe
 
-        states[key] = ActionRunState(phase: .running, output: "", displayCommand: plan.displayCommand, startedAt: Date())
+        states[key] = ActionRunState(phase: .running, output: "", displayCommand: plan.displayCommand, startedAt: startedAt)
         processes[key] = process
 
         outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
@@ -74,14 +89,32 @@ final class ActionRunner: ObservableObject {
             let text = String(decoding: data, as: UTF8.self)
             Task { @MainActor [weak self] in self?.append(text, to: key) }
         }
+        let evidenceRecorder = evidenceRecorder
         process.terminationHandler = { [weak self] process in
             outputPipe.fileHandleForReading.readabilityHandler = nil
             errorPipe.fileHandleForReading.readabilityHandler = nil
             let remaining = outputPipe.fileHandleForReading.readDataToEndOfFile()
                 + errorPipe.fileHandleForReading.readDataToEndOfFile()
             let tail = String(decoding: remaining, as: UTF8.self)
+            var evidenceSaveFailed = false
+            if let evidenceContext {
+                do {
+                    try evidenceRecorder.record(
+                        context: evidenceContext,
+                        exitCode: process.terminationStatus,
+                        endedAt: Date()
+                    )
+                } catch {
+                    evidenceSaveFailed = true
+                }
+            }
             Task { @MainActor [weak self] in
-                self?.finish(key: key, exitCode: process.terminationStatus, tail: tail)
+                self?.finish(
+                    key: key,
+                    exitCode: process.terminationStatus,
+                    tail: tail,
+                    evidenceSaveFailed: evidenceSaveFailed
+                )
             }
         }
 
@@ -203,12 +236,13 @@ final class ActionRunner: ObservableObject {
         states[key] = state
     }
 
-    private func finish(key: ActionRunKey, exitCode: Int32, tail: String) {
+    private func finish(key: ActionRunKey, exitCode: Int32, tail: String, evidenceSaveFailed: Bool) {
         append(tail, to: key)
         processes.removeValue(forKey: key)
         removeSession(for: key)
         let wasStopping = states[key]?.phase == .stopping
         states[key]?.phase = wasStopping ? .stopped : (exitCode == 0 ? .succeeded : .failed(exitCode))
+        states[key]?.evidenceSaveFailed = evidenceSaveFailed
         refreshHandler?()
     }
 

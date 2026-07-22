@@ -710,6 +710,47 @@ suite.run("verify stdout stderr exit code and manual evidence") {
     try suite.equal(originals, ["BLOCKED", "FAIL", "PASS", "PENDING"], "persisted evidence statuses must not change")
 }
 
+suite.run("Configured verification command records exact SHA and exit result") {
+    let temporary = try TemporaryDirectory(prefix: "runtime-atlas-command-evidence")
+    let repository = try makeGitRepository(in: temporary.url)
+    let paths = RuntimeAtlasPaths(baseDirectory: temporary.url.appendingPathComponent("data"))
+    let store = EvidenceStore(paths: paths)
+    let recorder = CommandEvidenceRecorder(evidenceStore: store)
+    let startedAt = Date().addingTimeInterval(-1)
+
+    let context = try recorder.prepare(
+        command: ["swift", "test"],
+        startedAt: startedAt,
+        currentDirectory: repository
+    )
+    try Data("changed during command\n".utf8).write(to: repository.appendingPathComponent("GENERATED.md"))
+    try runGit(["-C", repository.path, "add", "GENERATED.md"])
+    try runGit([
+        "-C", repository.path,
+        "-c", "user.name=Runtime Atlas Tests",
+        "-c", "user.email=runtime-atlas-tests@example.invalid",
+        "commit", "-m", "changed-during-command"
+    ])
+    let passed = try recorder.record(context: context, exitCode: 0)
+    try suite.equal(passed.status, .pass, "exit 0 should record PASS")
+    try suite.equal(passed.branch, "main", "the current branch should be recorded")
+    try suite.equal(passed.sha.count, 40, "the full current SHA should be recorded")
+    let currentSHA = try runGit(["-C", repository.path, "rev-parse", "HEAD"]).standardOutput
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    try suite.require(passed.sha != currentSHA, "the record must keep the SHA captured before the command changed it")
+    try suite.equal(passed.command, ["swift", "test"], "the resolved command should be recorded")
+
+    let failed = try recorder.record(
+        command: ["swift", "lint"],
+        exitCode: 2,
+        startedAt: startedAt,
+        currentDirectory: repository
+    )
+    try suite.equal(failed.status, .fail, "a nonzero exit should record FAIL")
+    try suite.equal(failed.exitCode, 2, "the original exit code should be preserved")
+    try suite.equal(try store.load().value.records.count, 2, "both configured verification results should persist")
+}
+
 suite.run("Korean English localization and language setting compatibility") {
     try suite.equal(AppLanguage.preferred(for: ["ko-KR"]), .korean, "Korean system language should default to Korean")
     try suite.equal(AppLanguage.preferred(for: ["en-US"]), .english, "English system language should default to English")
@@ -721,8 +762,8 @@ suite.run("Korean English localization and language setting compatibility") {
     try suite.equal(korean.addRepository, "저장소 추가", "Korean copy should be available")
     try suite.equal(korean.dockerUnavailable, "Docker 사용 불가", "runtime states should be localized")
     try suite.equal(korean.evidenceKind(.manual), "수동", "evidence kinds should be localized")
-    try suite.equal(korean.runtimeMap, "실행 연결", "technical section names should have a plain Korean primary label")
-    try suite.equal(english.runtimeMap, "Running Connections", "technical section names should have a plain English primary label")
+    try suite.equal(korean.runtimeMap, "실행 상태", "runtime section should use a plain Korean primary label")
+    try suite.equal(english.runtimeMap, "Runtime Status", "runtime section should use a plain English primary label")
     try suite.require(korean.detachedHead.contains("detached HEAD"), "plain copy should preserve the exact Git term")
     try suite.require(english.fullSHA.contains("SHA"), "plain copy should preserve the exact code identifier term")
     try suite.require(korean.processLocation(pid: 42, cwd: "/tmp/example").contains("cwd"), "process location should preserve cwd as a secondary term")
@@ -1077,6 +1118,81 @@ suite.run("Custom action validation, safe expansion, and worktree input") {
             // Expected.
         }
     }
+
+    let verification = CustomActionDefinition(
+        repositoryID: repositoryID,
+        name: "Test",
+        commandTemplate: "swift test",
+        recordsVerificationEvidence: true
+    )
+    try CustomActionPlanner.validate(verification)
+
+    let server = CustomActionDefinition(
+        repositoryID: repositoryID,
+        name: "Server",
+        commandTemplate: "npm run dev",
+        kind: .session
+    )
+    let listener = RuntimeProcess(
+        pid: 4_242,
+        name: "node",
+        cwd: worktree,
+        ports: [ListeningPort(address: "*", port: 3_000)]
+    )
+    try suite.require(
+        CustomActionRuntimeEvaluator.isExternallyRunning(
+            server,
+            mappedProcesses: [listener],
+            isManagedByRuntimeAtlas: false
+        ),
+        "a configured worktree listener should mark a server command as externally running"
+    )
+    try suite.require(
+        !CustomActionRuntimeEvaluator.isExternallyRunning(
+            server,
+            mappedProcesses: [listener],
+            isManagedByRuntimeAtlas: true
+        ),
+        "an app-managed session must not be mislabeled as external"
+    )
+    try suite.require(
+        !CustomActionRuntimeEvaluator.isExternallyRunning(
+            verification,
+            mappedProcesses: [listener],
+            isManagedByRuntimeAtlas: false
+        ),
+        "a run-once verification command must not inherit listener state"
+    )
+
+    for invalid in [
+        CustomActionDefinition(
+            repositoryID: repositoryID,
+            name: "Incorrect listener detection",
+            commandTemplate: "swift test",
+            detectsRunningWorktreeListener: true
+        ),
+        CustomActionDefinition(
+            repositoryID: repositoryID,
+            name: "Server is not verification",
+            commandTemplate: "npm run dev",
+            kind: .session,
+            recordsVerificationEvidence: true
+        ),
+        CustomActionDefinition(
+            repositoryID: repositoryID,
+            name: "Delete is not verification",
+            commandTemplate: "rm fixture",
+            risk: .destructive,
+            recordsVerificationEvidence: true
+        )
+    ] {
+        do {
+            try CustomActionPlanner.validate(invalid)
+            throw AssertionFailure(description: "an invalid runtime or verification contract was accepted")
+        } catch is CustomActionError {
+            // Expected.
+        }
+    }
 }
 
 suite.run("Custom action configuration is backward compatible and atomic") {
@@ -1102,6 +1218,33 @@ suite.run("Custom action configuration is backward compatible and atomic") {
     let saved = try store.load().value
     try suite.equal(saved.schemaVersion, 2, "saving an action should upgrade configuration schema")
     try suite.equal(saved.customActions, [action], "action should round-trip")
+    try suite.require(
+        saved.customActions[0].detectsRunningWorktreeListener,
+        "keep-running commands should persist external listener detection"
+    )
+
+    let legacyActionJSON = """
+    {
+      "id":"00000000-0000-0000-0000-000000000001",
+      "repositoryID":"00000000-0000-0000-0000-000000000002",
+      "name":"Legacy server",
+      "commandTemplate":"npm run dev",
+      "kind":"session",
+      "risk":"normal",
+      "workingDirectory":"selectedWorktree",
+      "effects":[],
+      "inputs":[]
+    }
+    """
+    let legacyAction = try JSONDecoder().decode(CustomActionDefinition.self, from: Data(legacyActionJSON.utf8))
+    try suite.require(
+        legacyAction.detectsRunningWorktreeListener,
+        "legacy keep-running commands should gain safe worktree listener detection"
+    )
+    try suite.require(
+        !legacyAction.recordsVerificationEvidence,
+        "legacy commands must not become verification commands implicitly"
+    )
     try suite.equal(
         WorktreeOrderIdentity.key(branch: "feature/one", detached: false, sha: "abc"),
         "branch:feature/one",

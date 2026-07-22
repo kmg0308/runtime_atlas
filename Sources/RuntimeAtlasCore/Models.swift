@@ -166,12 +166,16 @@ public struct CustomActionDefinition: Codable, Equatable, Identifiable, Sendable
     public var workingDirectory: CustomActionWorkingDirectory
     public var effects: [String]
     public var inputs: [CustomActionInputDefinition]
+    public var detectsRunningWorktreeListener: Bool
+    public var recordsVerificationEvidence: Bool
 
     public init(
         id: UUID = UUID(), repositoryID: UUID, name: String, commandTemplate: String,
         kind: CustomActionKind = .task, risk: CustomActionRisk = .normal,
         workingDirectory: CustomActionWorkingDirectory = .selectedWorktree,
-        effects: [String] = [], inputs: [CustomActionInputDefinition] = []
+        effects: [String] = [], inputs: [CustomActionInputDefinition] = [],
+        detectsRunningWorktreeListener: Bool? = nil,
+        recordsVerificationEvidence: Bool = false
     ) {
         self.id = id
         self.repositoryID = repositoryID
@@ -182,6 +186,35 @@ public struct CustomActionDefinition: Codable, Equatable, Identifiable, Sendable
         self.workingDirectory = workingDirectory
         self.effects = effects
         self.inputs = inputs
+        self.detectsRunningWorktreeListener = detectsRunningWorktreeListener
+            ?? (kind == .session && workingDirectory == .selectedWorktree)
+        self.recordsVerificationEvidence = recordsVerificationEvidence
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, repositoryID, name, commandTemplate, kind, risk, workingDirectory, effects, inputs
+        case detectsRunningWorktreeListener, recordsVerificationEvidence
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        repositoryID = try container.decode(UUID.self, forKey: .repositoryID)
+        name = try container.decode(String.self, forKey: .name)
+        commandTemplate = try container.decode(String.self, forKey: .commandTemplate)
+        kind = try container.decode(CustomActionKind.self, forKey: .kind)
+        risk = try container.decode(CustomActionRisk.self, forKey: .risk)
+        workingDirectory = try container.decode(CustomActionWorkingDirectory.self, forKey: .workingDirectory)
+        effects = try container.decodeIfPresent([String].self, forKey: .effects) ?? []
+        inputs = try container.decodeIfPresent([CustomActionInputDefinition].self, forKey: .inputs) ?? []
+        detectsRunningWorktreeListener = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .detectsRunningWorktreeListener
+        ) ?? (kind == .session && workingDirectory == .selectedWorktree)
+        recordsVerificationEvidence = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .recordsVerificationEvidence
+        ) ?? false
     }
 }
 

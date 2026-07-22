@@ -25,6 +25,19 @@ public struct CustomActionPlan: Equatable, Sendable {
     public let displayCommand: String
 }
 
+public enum CustomActionRuntimeEvaluator {
+    public static func isExternallyRunning(
+        _ action: CustomActionDefinition,
+        mappedProcesses: [RuntimeProcess],
+        isManagedByRuntimeAtlas: Bool
+    ) -> Bool {
+        !isManagedByRuntimeAtlas
+            && action.kind == .session
+            && action.detectsRunningWorktreeListener
+            && mappedProcesses.contains { !$0.ports.isEmpty }
+    }
+}
+
 public enum CustomActionPlanner {
     public static func validate(_ action: CustomActionDefinition) throws {
         let name = action.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -36,6 +49,13 @@ public enum CustomActionPlanner {
         }
         guard !action.commandTemplate.isEmpty, action.commandTemplate.count <= 500 else {
             throw CustomActionError.invalidTemplate("use 1-500 characters")
+        }
+        guard !action.detectsRunningWorktreeListener
+                || (action.kind == .session && action.workingDirectory == .selectedWorktree) else {
+            throw CustomActionError.invalidInput("open-port running detection is only available for keep-running commands")
+        }
+        guard !action.recordsVerificationEvidence || (action.kind == .task && action.risk == .normal) else {
+            throw CustomActionError.invalidInput("verification recording is only available for non-destructive run-once commands")
         }
         let keys = action.inputs.map(\.key)
         guard Set(keys).count == keys.count else { throw CustomActionError.invalidInput("keys must be unique") }

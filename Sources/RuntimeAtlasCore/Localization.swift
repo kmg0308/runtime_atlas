@@ -94,7 +94,7 @@ public struct AtlasCopy: Sendable {
             korean: "선택한 코드 버전과 로컬에서만 쓰는 DB 구분 이름입니다."
         )
     }
-    public var runtimeMap: String { value(english: "Running Connections", korean: "실행 연결") }
+    public var runtimeMap: String { value(english: "Runtime Status", korean: "실행 상태") }
     public var runtimeMapSubtitle: String {
         value(
             english: "Processes, containers, and open ports linked to this working folder.",
@@ -104,8 +104,8 @@ public struct AtlasCopy: Sendable {
     public var evidence: String { value(english: "Verification Records", korean: "검증 기록") }
     public var evidenceSubtitle: String {
         value(
-            english: "Results never change. Records for older code are shown as Previous code (STALE).",
-            korean: "결과는 바꾸지 않습니다. 이전 코드의 기록은 이전 코드 기준(STALE)으로 표시합니다."
+            english: "Selected test, lint, and build commands save PASS or FAIL for the exact code version.",
+            korean: "선택한 테스트·린트·빌드 명령어의 PASS 또는 FAIL을 정확한 코드 버전에 기록합니다."
         )
     }
     public var actions: String { value(english: "Commands", korean: "명령어") }
@@ -161,6 +161,34 @@ public struct AtlasCopy: Sendable {
     public var stop: String { value(english: "Stop", korean: "중지") }
     public var stopping: String { value(english: "Stopping", korean: "중지 중") }
     public var running: String { value(english: "Running", korean: "실행 중") }
+    public var runningOutsideApp: String { value(english: "External · Running", korean: "외부 실행 중") }
+    public var externalRunningHelp: String {
+        value(
+            english: "A listener is already running from this working folder. Close it in Runtime Status before starting another one.",
+            korean: "이 작업 폴더에서 이미 포트를 연 프로세스가 있습니다. 새로 실행하려면 실행 상태에서 해당 포트를 먼저 닫으세요."
+        )
+    }
+    public var detectExternalListener: String {
+        value(english: "Detect a listener already running in the working folder", korean: "작업 폴더에서 이미 실행 중인 서버 감지")
+    }
+    public var detectExternalListenerHelp: String {
+        value(
+            english: "Use this for server commands. Any process with an open TCP port and this working folder as its cwd is shown as running outside the app.",
+            korean: "서버 명령어에 사용합니다. 이 작업 폴더를 실행 위치(cwd)로 사용하며 TCP 포트를 연 프로세스가 있으면 외부 실행으로 표시합니다."
+        )
+    }
+    public var recordVerificationEvidence: String {
+        value(english: "Save the exit result as a verification record", korean: "종료 결과를 검증 기록으로 저장")
+    }
+    public var recordVerificationEvidenceHelp: String {
+        value(
+            english: "For tests, lint, or builds. Exit 0 records PASS; any other exit records FAIL for the exact current SHA.",
+            korean: "테스트·린트·빌드 명령어에 사용합니다. 종료 0은 현재 SHA의 PASS, 그 외는 FAIL로 기록합니다."
+        )
+    }
+    public var evidenceSaveFailed: String {
+        value(english: "Finished, but the verification record could not be saved.", korean: "명령은 끝났지만 검증 기록을 저장하지 못했습니다.")
+    }
     public var succeeded: String { value(english: "Finished", korean: "완료") }
     public var stopped: String { value(english: "Stopped", korean: "중지됨") }
     public func failedExit(_ code: Int32) -> String { value(english: "Failed (exit \(code))", korean: "실패 (종료 \(code))") }
@@ -283,7 +311,7 @@ public struct AtlasCopy: Sendable {
     }
     public var dockerAvailableBadge: String { value(english: "DOCKER AVAILABLE", korean: "DOCKER 사용 가능") }
     public func runtimeMapAccessibility(_ name: String) -> String {
-        value(english: "Running connections for \(name)", korean: "\(name)의 실행 연결")
+        value(english: "Runtime status for \(name)", korean: "\(name)의 실행 상태")
     }
 
     public var currentSHA: String { value(english: "CURRENT CODE", korean: "현재 코드") }
@@ -295,8 +323,8 @@ public struct AtlasCopy: Sendable {
     }
     public var runEvidenceCommand: String {
         value(
-            english: "Run runtime-atlas verify or record a browser/manual result from this worktree.",
-            korean: "이 워크트리에서 runtime-atlas verify를 실행하거나 브라우저/수동 결과를 기록하세요."
+            english: "Enable verification recording for a run-once command, use runtime-atlas verify, or record a browser/manual result.",
+            korean: "한 번 실행 명령어에서 검증 기록을 켜거나 runtime-atlas verify 또는 브라우저/수동 기록을 사용하세요."
         )
     }
     public var history: String { value(english: "All records", korean: "전체 기록") }

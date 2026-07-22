@@ -12,6 +12,15 @@ struct WorktreeDetailView: View {
             LazyVStack(alignment: .leading, spacing: 22) {
                 detailHeader
 
+                if worktree.availability == .unavailable {
+                    InlineNotice(
+                        icon: "exclamationmark.triangle.fill",
+                        title: copy.worktreeUnavailable,
+                        message: copy.localizedCoreMessage(worktree.unavailableReason ?? copy.gitCouldNotInspectWorktree),
+                        color: RuntimeAtlasTheme.amber
+                    )
+                }
+
                 if let message = model.operationMessage {
                     InlineNotice(
                         icon: "info.circle.fill",
@@ -38,13 +47,8 @@ struct WorktreeDetailView: View {
                         .environmentObject(model)
                 }
 
-                SectionCard(
-                    title: copy.code,
-                    subtitle: copy.codeSubtitle
-                ) {
-                    CodeSection(worktree: worktree)
-                        .environmentObject(model)
-                }
+                DatabaseLabelEditor(worktree: worktree)
+                    .environmentObject(model)
 
                 SectionCard(
                     title: copy.runtimeMap,
@@ -115,18 +119,46 @@ struct WorktreeDetailView: View {
     }
 
     private var headerBadges: some View {
-        HStack(spacing: 7) {
-            AtlasBadge(
-                text: worktree.detached ? copy.detachedBadge : (worktree.branch ?? copy.noBranchBadge),
-                icon: "arrow.triangle.branch",
-                color: RuntimeAtlasTheme.accent
-            )
-            AtlasBadge(
-                text: worktree.dirty ? copy.dirtyBadge : copy.cleanBadge,
-                icon: worktree.dirty ? "circle.dotted" : "checkmark.circle.fill",
-                color: worktree.dirty ? RuntimeAtlasTheme.amber : RuntimeAtlasTheme.mint
-            )
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 7) {
+                branchBadge
+                dirtyBadge
+                shaBadge
+            }
+            VStack(alignment: .leading, spacing: 7) {
+                branchBadge
+                HStack(spacing: 7) {
+                    dirtyBadge
+                    shaBadge
+                }
+            }
         }
+    }
+
+    private var branchBadge: some View {
+        AtlasBadge(
+            text: worktree.detached ? copy.detachedBadge : (worktree.branch ?? copy.noBranchBadge),
+            icon: "arrow.triangle.branch",
+            color: RuntimeAtlasTheme.accent
+        )
+    }
+
+    private var dirtyBadge: some View {
+        AtlasBadge(
+            text: worktree.dirty ? copy.dirtyBadge : copy.cleanBadge,
+            icon: worktree.dirty ? "circle.dotted" : "checkmark.circle.fill",
+            color: worktree.dirty ? RuntimeAtlasTheme.amber : RuntimeAtlasTheme.mint
+        )
+    }
+
+    private var shaBadge: some View {
+        AtlasBadge(
+            text: worktree.shortSHA.isEmpty ? copy.unavailableValue : worktree.shortSHA,
+            icon: "number",
+            color: RuntimeAtlasTheme.slate
+        )
+        .help(worktree.sha)
+        .accessibilityLabel("\(copy.fullSHA), \(worktree.sha)")
     }
 }
 
@@ -156,68 +188,41 @@ private struct SectionCard<Content: View>: View {
     }
 }
 
-private struct CodeSection: View {
+private struct DatabaseLabelEditor: View {
     @EnvironmentObject private var model: AtlasAppModel
     @Environment(\.atlasCopy) private var copy
     let worktree: WorktreeStatus
     @State private var databaseLabel = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if worktree.availability == .unavailable {
-                InlineNotice(
-                    icon: "exclamationmark.triangle.fill",
-                    title: copy.worktreeUnavailable,
-                    message: copy.localizedCoreMessage(worktree.unavailableReason ?? copy.gitCouldNotInspectWorktree),
-                    color: RuntimeAtlasTheme.amber
-                )
-            }
-
-            VStack(spacing: 0) {
-                MetadataRow(label: copy.branch, value: worktree.detached ? copy.detachedHead : (worktree.branch ?? copy.unknown))
-                Divider().overlay(RuntimeAtlasTheme.border)
-                MetadataRow(label: copy.fullSHA, value: worktree.sha, monospaced: true)
-                Divider().overlay(RuntimeAtlasTheme.border)
-                MetadataRow(label: copy.workingTree, value: worktree.dirty ? copy.dirtyWorkingTree : copy.cleanWorkingTree)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(RuntimeAtlasTheme.border)
-            }
-
-            VStack(alignment: .leading, spacing: 7) {
-                if let binding = worktree.databaseBinding {
-                    InlineNotice(
-                        icon: "link.circle.fill",
-                        title: copy.automaticDBLinked,
-                        message: copy.automaticDBDetails(binding.label),
-                        color: RuntimeAtlasTheme.mint
-                    )
+        VStack(alignment: .leading, spacing: 10) {
+            if let binding = worktree.databaseBinding {
+                HStack(spacing: 7) {
+                    Image(systemName: "link.circle.fill")
+                        .foregroundStyle(RuntimeAtlasTheme.mint)
+                    Text(copy.automaticDBDetails(binding.label))
+                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .medium))
+                        .lineLimit(2)
                 }
+            }
 
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(copy.logicalDBLabel)
-                            .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
-                        Text(copy.logicalDBDescription)
-                            .font(.system(size: RuntimeAtlasTheme.Typography.caption))
-                            .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-                    }
-                    Spacer()
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    databaseLabelTitle
+                    databaseField
+                    saveDatabaseButton
                 }
-
-                ViewThatFits(in: .horizontal) {
+                VStack(alignment: .leading, spacing: 8) {
+                    databaseLabelTitle
                     HStack(spacing: 8) {
-                        databaseField
-                        saveDatabaseButton
-                    }
-                    VStack(alignment: .trailing, spacing: 8) {
                         databaseField
                         saveDatabaseButton
                     }
                 }
             }
         }
+        .padding(14)
+        .atlasSurface()
         .onAppear {
             databaseLabel = worktree.manualDatabaseLabel ?? ""
         }
@@ -227,6 +232,18 @@ private struct CodeSection: View {
         .onChange(of: worktree.path) { _ in
             databaseLabel = worktree.manualDatabaseLabel ?? ""
         }
+    }
+
+    private var databaseLabelTitle: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(copy.logicalDBLabel)
+                .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
+            Text(copy.logicalDBDescription)
+                .font(.system(size: RuntimeAtlasTheme.Typography.caption))
+                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
+                .lineLimit(2)
+        }
+        .frame(minWidth: 160, alignment: .leading)
     }
 
     private var databaseField: some View {
@@ -252,45 +269,6 @@ private struct CodeSection: View {
         }
         .buttonStyle(AtlasButtonStyle(prominent: true))
         .accessibilityLabel(copy.saveLogicalDBLabel)
-    }
-}
-
-private struct MetadataRow: View {
-    @Environment(\.atlasCopy) private var copy
-    let label: String
-    let value: String
-    var monospaced = false
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: 14) {
-                metadataLabel.frame(width: 130, alignment: .leading)
-                metadataValue
-                Spacer(minLength: 0)
-            }
-            VStack(alignment: .leading, spacing: 5) {
-                metadataLabel
-                metadataValue
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var metadataLabel: some View {
-            Text(label)
-                .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .medium))
-                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-    }
-
-    private var metadataValue: some View {
-        Text(value.isEmpty ? copy.unavailableValue : value)
-                .font(.system(size: RuntimeAtlasTheme.Typography.secondary, design: monospaced ? .monospaced : .default))
-                .foregroundStyle(value.isEmpty ? RuntimeAtlasTheme.amber : RuntimeAtlasTheme.primaryText)
-                .lineLimit(2)
-                .truncationMode(.middle)
-                .textSelection(.enabled)
     }
 }
 

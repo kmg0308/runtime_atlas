@@ -15,7 +15,9 @@ Runtime Atlas is a local-first native macOS app that shows which code is checked
 - Map running Docker containers when a host mount is inside the worktree; a missing CLI, stopped daemon, or permission failure stays a local partial error.
 - Store only a user-entered logical DB label such as `refactoring_test`.
 - Accept a project-reported DB display name through a provider-neutral CLI binding without reading its URL or credentials.
-- Turn repeated repository commands into local buttons, including one-time tasks and app-owned running sessions.
+- Turn repeated repository commands into local buttons, including one-time tasks and running sessions.
+- Recognize an already-running worktree server by its mapped LISTEN process when that session command enables listener detection.
+- Optionally save a run-once test, lint, or build command's exit result as SHA-bound PASS/FAIL evidence.
 - Record command, browser, and manual evidence against the exact worktree SHA; old-SHA evidence is displayed as `STALE` without changing the original record.
 - Export the same state as stable JSON through `runtime-atlas status --json`.
 - Use the full app in Korean or English and switch languages immediately from the macOS Settings window.
@@ -41,7 +43,9 @@ There is no account, telemetry, cloud sync, server, AI agent, background daemon,
 
 Choose **Configure Commands** under a repository in the sidebar to add or edit its shared command definitions. Each worktree screen shows the same compact command buttons and runs them from that worktree, so configuration stays repository-wide while run/stop state remains isolated per worktree. Command text and output stay out of the way until confirmation or output review is needed. Runtime Atlas intentionally supports only one command with separate arguments—no pipelines, redirects, `&&`, shell expansion, schedules, or workflow builder.
 
-For a local server, create a **Keep running** command such as `npm run dev`. Runtime Atlas loads the normal login-shell environment, starts it from the selected worktree, shows limited live output, and can stop the process group that this app started. Closing Runtime Atlas stops its running sessions. Separately, **Close Port** can request graceful termination of any currently detected listener whose cwd and ports still map to the selected worktree, even if another terminal started it.
+For a local server, create a **Keep running** command such as `npm run dev`. Runtime Atlas loads the normal login-shell environment, starts it from the selected worktree, shows limited live output, and can stop the process group that this app started. Closing Runtime Atlas stops its running sessions. Listener detection is enabled by default for existing and new worktree-based keep-running commands: if another terminal already has a LISTEN process whose cwd maps to that worktree, the button says **External · Running** instead of starting a duplicate. Close that process from **Runtime Status** after reviewing its PID and ports. You can turn listener detection off for a command that is not a server.
+
+For a non-destructive **Run once** test, lint, or build command, enable **Save the exit result as a verification record**. Runtime Atlas captures the branch, full SHA, and dirty state before launch, then records PASS for exit 0 or FAIL for any other exit code. Server commands and destructive commands cannot be marked as verification because their exit status does not reliably prove the selected code.
 
 For commands that need a value, add a whole-argument placeholder. For example:
 
