@@ -616,7 +616,8 @@ suite.run("Korean English localization and language setting compatibility") {
     try suite.equal(korean.checkForUpdates, "업데이트 확인", "Korean update controls should be available")
     try suite.equal(korean.actions, "명령어", "the repository entry should use command wording")
     try suite.equal(english.actions, "Commands", "English should use command wording")
-    try suite.require(korean.actionsSubtitle.contains("실행할 작업 폴더"), "repository commands should explain target selection")
+    try suite.require(korean.actionsSubtitle.contains("모든 작업 폴더"), "repository settings should explain shared definitions")
+    try suite.require(korean.worktreeActionsSubtitle.contains("이 작업 폴더"), "worktree commands should explain their run location")
     try suite.equal(korean.commandRunLocation, "실행할 작업 폴더", "the run target picker should be explicit")
     try suite.require(
         korean.updateAvailable("1.2.3").contains("1.2.3"),

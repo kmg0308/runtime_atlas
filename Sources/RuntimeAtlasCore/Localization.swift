@@ -111,8 +111,14 @@ public struct AtlasCopy: Sendable {
     public var actions: String { value(english: "Commands", korean: "명령어") }
     public var actionsSubtitle: String {
         value(
-            english: "Configure commands once for this repository, then choose the working folder where they run.",
-            korean: "이 저장소에 명령어를 한 번 설정하고, 실행할 작업 폴더만 선택합니다."
+            english: "Configure the commands shared by every working folder in this repository.",
+            korean: "이 저장소의 모든 작업 폴더가 함께 쓰는 명령어를 설정합니다."
+        )
+    }
+    public var worktreeActionsSubtitle: String {
+        value(
+            english: "Run the repository's shared commands in this working folder.",
+            korean: "저장소에 설정한 명령어를 이 작업 폴더에서 실행합니다."
         )
     }
     public var configureActions: String { value(english: "Configure Commands", korean: "명령어 설정") }

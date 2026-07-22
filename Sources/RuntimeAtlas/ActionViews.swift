@@ -1,118 +1,36 @@
 import RuntimeAtlasCore
 import SwiftUI
 
-struct RepositoryCommandsSheet: View {
+struct WorktreeCommandsSection: View {
     @EnvironmentObject private var model: AtlasAppModel
     @EnvironmentObject private var runner: ActionRunner
     @Environment(\.atlasCopy) private var copy
-    @Environment(\.dismiss) private var dismiss
     let repository: RepositoryStatus
-    @State private var selectedWorktreePath: String
-    @State private var showingManager = false
+    let worktree: WorktreeStatus
     @State private var actionToPrepare: CustomActionDefinition?
 
     private var actions: [CustomActionDefinition] { model.actions(for: repository.id) }
     private var availableWorktrees: [WorktreeStatus] {
         repository.worktrees.filter { $0.availability == .available }
     }
-    private var selectedWorktree: WorktreeStatus? {
-        availableWorktrees.first { $0.path == selectedWorktreePath }
-    }
-
-    init(repository: RepositoryStatus, initialWorktreePath: String?) {
-        self.repository = repository
-        let available = repository.worktrees.filter { $0.availability == .available }
-        let initial = available.first { $0.path == initialWorktreePath }?.path
-            ?? available.first?.path
-            ?? ""
-        _selectedWorktreePath = State(initialValue: initial)
-    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(copy.repositoryActionsFor(repository.name))
-                        .font(.system(size: RuntimeAtlasTheme.Typography.modalTitle, weight: .semibold))
-                    Text(copy.actionsSubtitle)
-                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
-                        .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                Button(copy.close) { dismiss() }
-            }
-            .padding(20)
+        VStack(alignment: .leading, spacing: 14) {
+            Text(copy.sessionCloseNotice)
+                .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
+                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
 
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    runLocation
-
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 12) {
-                            commandsHelp
-                            Spacer(minLength: 8)
-                            configureButton
-                        }
-                        VStack(alignment: .leading, spacing: 9) {
-                            commandsHelp
-                            configureButton
-                        }
-                    }
-
-                    ForEach(actions) { action in actionRow(action) }
-                }
-                .padding(20)
-            }
-        }
-        .frame(minWidth: 520, minHeight: 480)
-        .background(RuntimeAtlasTheme.background)
-        .sheet(isPresented: $showingManager) {
-            ActionManagerView(repository: repository)
-                .environmentObject(model).environmentObject(runner)
-                .environment(\.atlasCopy, copy)
+            ForEach(actions) { action in actionRow(action) }
         }
         .sheet(item: $actionToPrepare) { action in
-            if let selectedWorktree {
-                ActionExecutionView(action: action, repository: repository, worktree: selectedWorktree)
-                    .environmentObject(model).environmentObject(runner)
-                    .environment(\.atlasCopy, copy)
-            }
-        }
-    }
-
-    @ViewBuilder private var runLocation: some View {
-        if availableWorktrees.count > 1 {
-            Picker(copy.commandRunLocation, selection: $selectedWorktreePath) {
-                ForEach(availableWorktrees) { worktree in
-                    Text(URL(fileURLWithPath: worktree.path).lastPathComponent)
-                        .tag(worktree.path)
-                }
-            }
-            .pickerStyle(.menu)
-        } else if let worktree = availableWorktrees.first {
-            HStack(spacing: 8) {
-                Text(copy.commandRunLocation)
-                    .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-                Text(URL(fileURLWithPath: worktree.path).lastPathComponent)
-                    .fontWeight(.medium)
-            }
-            .font(.system(size: RuntimeAtlasTheme.Typography.body))
-            .accessibilityElement(children: .combine)
-        } else {
-            InlineNotice(
-                icon: "exclamationmark.triangle.fill",
-                title: copy.noAvailableWorktree,
-                message: copy.reviewUnavailableMessage,
-                color: RuntimeAtlasTheme.amber
-            )
+            ActionExecutionView(action: action, repository: repository, worktree: worktree)
+                .environmentObject(model).environmentObject(runner)
+                .environment(\.atlasCopy, copy)
         }
     }
 
     @ViewBuilder private func actionRow(_ action: CustomActionDefinition) -> some View {
-        let state = selectedWorktree.map { runner.state(for: action, worktreePath: $0.path) } ?? nil
+        let state = runner.state(for: action, worktreePath: worktree.path)
         VStack(alignment: .leading, spacing: 9) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .center, spacing: 12) {
@@ -142,43 +60,13 @@ struct RepositoryCommandsSheet: View {
         .accessibilityElement(children: .contain)
     }
 
-    @ViewBuilder private var commandsHelp: some View {
-        if actions.isEmpty {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(copy.noActions).font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
-                Text(copy.noActionsHelp).font(.system(size: RuntimeAtlasTheme.Typography.secondary)).foregroundStyle(RuntimeAtlasTheme.secondaryText)
-            }
-        } else {
-            Text(copy.sessionCloseNotice)
-                .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
-                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-        }
-    }
-
-    private var configureButton: some View {
-        Button(copy.configureActions) { showingManager = true }
-            .buttonStyle(AtlasButtonStyle())
-    }
-
     private func actionIdentity(_ action: CustomActionDefinition) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: action.kind == .session ? "play.rectangle.fill" : "terminal.fill")
                 .foregroundStyle(RuntimeAtlasTheme.accent).font(.system(size: 18))
             VStack(alignment: .leading, spacing: 5) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 7) {
-                        Text(action.name).font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
-                        if action.risk == .destructive {
-                            AtlasBadge(text: copy.destructiveAction, icon: "exclamationmark.triangle.fill", color: RuntimeAtlasTheme.amber)
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(action.name).font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
-                        if action.risk == .destructive {
-                            AtlasBadge(text: copy.destructiveAction, icon: "exclamationmark.triangle.fill", color: RuntimeAtlasTheme.amber)
-                        }
-                    }
-                }
+                Text(action.name)
+                    .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
                 Text(action.commandTemplate)
                     .font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
                     .foregroundStyle(RuntimeAtlasTheme.secondaryText).lineLimit(3)
@@ -190,22 +78,22 @@ struct RepositoryCommandsSheet: View {
         Text(phaseText(state?.phase))
             .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .medium))
             .foregroundStyle(phaseColor(state?.phase))
-        if let selectedWorktree, runner.isRunning(action, worktreePath: selectedWorktree.path) {
-            Button(copy.stop) { runner.stop(action: action, worktreePath: selectedWorktree.path) }
+        if runner.isRunning(action, worktreePath: worktree.path) {
+            Button(copy.stop) { runner.stop(action: action, worktreePath: worktree.path) }
                 .buttonStyle(AtlasButtonStyle())
         } else {
             Button(action.kind == .session ? copy.start : copy.run) { prepare(action) }
                 .buttonStyle(AtlasButtonStyle(prominent: true))
-                .disabled(selectedWorktree == nil)
+                .disabled(worktree.availability != .available)
         }
     }
 
     private func prepare(_ action: CustomActionDefinition) {
-        guard let selectedWorktree else { return }
+        guard worktree.availability == .available else { return }
         if action.inputs.isEmpty && action.risk == .normal {
             do {
-                let plan = try CustomActionPlanner.plan(action: action, values: [:], selectedWorktree: selectedWorktree.path, repositoryRoot: repository.path, availableWorktrees: availableWorktrees.map(\.path))
-                try runner.start(action: action, plan: plan, worktreePath: selectedWorktree.path)
+                let plan = try CustomActionPlanner.plan(action: action, values: [:], selectedWorktree: worktree.path, repositoryRoot: repository.path, availableWorktrees: availableWorktrees.map(\.path))
+                try runner.start(action: action, plan: plan, worktreePath: worktree.path)
             } catch let error as CustomActionError { model.operationMessage = copy.customActionError(error) }
             catch { model.operationMessage = copy.actionLaunchFailed }
         } else { actionToPrepare = action }
@@ -219,7 +107,7 @@ struct RepositoryCommandsSheet: View {
     }
 }
 
-private struct ActionManagerView: View {
+struct ActionManagerView: View {
     @EnvironmentObject private var model: AtlasAppModel
     @EnvironmentObject private var runner: ActionRunner
     @Environment(\.atlasCopy) private var copy

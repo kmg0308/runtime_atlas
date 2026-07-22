@@ -157,7 +157,7 @@ private struct RepositorySidebarSection: View {
     @Environment(\.atlasCopy) private var copy
     let repository: RepositoryStatus
     let onRemove: () -> Void
-    @State private var showingCommands = false
+    @State private var showingCommandSettings = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -194,11 +194,11 @@ private struct RepositorySidebarSection: View {
             .padding(.horizontal, 12)
 
             Button {
-                showingCommands = true
+                showingCommandSettings = true
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "terminal")
-                    Text(copy.actions)
+                    Text(copy.configureActions)
                         .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .medium))
                     Spacer(minLength: 4)
                     Text("\(model.actions(for: repository.id).count)")
@@ -242,11 +242,8 @@ private struct RepositorySidebarSection: View {
                 .padding(.horizontal, 7)
             }
         }
-        .sheet(isPresented: $showingCommands) {
-            RepositoryCommandsSheet(
-                repository: repository,
-                initialWorktreePath: model.selectedWorktreePath
-            )
+        .sheet(isPresented: $showingCommandSettings) {
+            ActionManagerView(repository: repository)
             .environmentObject(model)
             .environment(\.atlasCopy, copy)
         }
