@@ -5,7 +5,12 @@ import RuntimeAtlasCore
 // this target still guards the public test-consumer surface at compile time.
 enum CompileOnlyTests {
     static func canConstructCoreTypes() {
-        _ = EvidenceCounts()
+        _ = AtlasStatus(
+            processDiscovery: .available,
+            dockerDiscovery: .available,
+            notices: [],
+            repositories: []
+        )
         _ = DiscoveryAvailability.available
         _ = RuntimeAtlasConfiguration()
     }

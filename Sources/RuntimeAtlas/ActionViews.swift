@@ -16,12 +16,19 @@ struct WorktreeCommandsSection: View {
     }
 
     var body: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 8, alignment: .topLeading)],
-            alignment: .leading,
-            spacing: 8
-        ) {
-            ForEach(actions) { action in compactAction(action) }
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 10) {
+                ForEach(actions) { action in
+                    compactAction(action)
+                        .frame(minWidth: 240, maxWidth: .infinity, alignment: .topLeading)
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(actions) { action in
+                    compactAction(action)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+            }
         }
         .sheet(item: $actionToPrepare) { action in
             ActionExecutionView(action: action, repository: repository, worktree: worktree)
@@ -101,12 +108,6 @@ struct WorktreeCommandsSection: View {
                     .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .medium))
                     .foregroundStyle(RuntimeAtlasTheme.red)
                     .lineLimit(1)
-            }
-            if state?.evidenceSaveFailed == true {
-                Text(copy.evidenceSaveFailed)
-                    .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .medium))
-                    .foregroundStyle(RuntimeAtlasTheme.red)
-                    .lineLimit(2)
             }
         }
         .accessibilityElement(children: .contain)
@@ -277,7 +278,6 @@ private struct ActionEditorView: View {
                         .onChange(of: draft.kind) { kind in
                             if kind == .session {
                                 draft.detectsRunningWorktreeListener = draft.workingDirectory == .selectedWorktree
-                                draft.recordsVerificationEvidence = false
                             } else {
                                 draft.detectsRunningWorktreeListener = false
                             }
@@ -292,7 +292,6 @@ private struct ActionEditorView: View {
                         get: { draft.risk == .destructive },
                         set: {
                             draft.risk = $0 ? .destructive : .normal
-                            if $0 { draft.recordsVerificationEvidence = false }
                         }
                     ))
                     if draft.kind == .session && draft.workingDirectory == .selectedWorktree {
@@ -300,14 +299,6 @@ private struct ActionEditorView: View {
                             Toggle(copy.detectExternalListener, isOn: $draft.detectsRunningWorktreeListener)
                                 .labelsHidden()
                             Text(copy.detectExternalListenerHelp)
-                                .font(.system(size: RuntimeAtlasTheme.Typography.caption))
-                                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-                        }
-                    } else if draft.risk == .normal {
-                        labeled(copy.recordVerificationEvidence) {
-                            Toggle(copy.recordVerificationEvidence, isOn: $draft.recordsVerificationEvidence)
-                                .labelsHidden()
-                            Text(copy.recordVerificationEvidenceHelp)
                                 .font(.system(size: RuntimeAtlasTheme.Typography.caption))
                                 .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                         }

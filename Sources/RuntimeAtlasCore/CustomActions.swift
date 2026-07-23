@@ -54,9 +54,6 @@ public enum CustomActionPlanner {
                 || (action.kind == .session && action.workingDirectory == .selectedWorktree) else {
             throw CustomActionError.invalidInput("open-port running detection is only available for keep-running commands")
         }
-        guard !action.recordsVerificationEvidence || (action.kind == .task && action.risk == .normal) else {
-            throw CustomActionError.invalidInput("verification recording is only available for non-destructive run-once commands")
-        }
         let keys = action.inputs.map(\.key)
         guard Set(keys).count == keys.count else { throw CustomActionError.invalidInput("keys must be unique") }
         for input in action.inputs {

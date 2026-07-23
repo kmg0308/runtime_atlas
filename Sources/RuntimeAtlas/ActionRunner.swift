@@ -20,7 +20,6 @@ struct ActionRunState: Equatable {
     var output: String
     var displayCommand: String
     var startedAt: Date
-    var evidenceSaveFailed: Bool = false
 }
 
 @MainActor
@@ -29,15 +28,10 @@ final class ActionRunner: ObservableObject {
     private var processes: [ActionRunKey: Process] = [:]
     private var sessions: [ActionRunKey: ActionSessionRecord] = [:]
     private let sessionStore: ActionSessionStore
-    private let evidenceRecorder: CommandEvidenceRecorder
     var refreshHandler: (() -> Void)?
 
-    init(
-        sessionStore: ActionSessionStore = ActionSessionStore(),
-        evidenceRecorder: CommandEvidenceRecorder = CommandEvidenceRecorder()
-    ) {
+    init(sessionStore: ActionSessionStore = ActionSessionStore()) {
         self.sessionStore = sessionStore
-        self.evidenceRecorder = evidenceRecorder
     }
 
     func state(for action: CustomActionDefinition, worktreePath: String) -> ActionRunState? {
@@ -54,14 +48,6 @@ final class ActionRunner: ObservableObject {
         guard processes[key] == nil, sessions[key] == nil else { return }
 
         let startedAt = Date()
-        let evidenceContext = try action.recordsVerificationEvidence
-            ? evidenceRecorder.prepare(
-                command: [plan.executable] + plan.arguments,
-                startedAt: startedAt,
-                currentDirectory: URL(fileURLWithPath: plan.currentDirectory, isDirectory: true)
-            )
-            : nil
-
         let process = Process()
         let identityToken = UUID()
         process.executableURL = try supervisorURL()
@@ -89,31 +75,17 @@ final class ActionRunner: ObservableObject {
             let text = String(decoding: data, as: UTF8.self)
             Task { @MainActor [weak self] in self?.append(text, to: key) }
         }
-        let evidenceRecorder = evidenceRecorder
         process.terminationHandler = { [weak self] process in
             outputPipe.fileHandleForReading.readabilityHandler = nil
             errorPipe.fileHandleForReading.readabilityHandler = nil
             let remaining = outputPipe.fileHandleForReading.readDataToEndOfFile()
                 + errorPipe.fileHandleForReading.readDataToEndOfFile()
             let tail = String(decoding: remaining, as: UTF8.self)
-            var evidenceSaveFailed = false
-            if let evidenceContext {
-                do {
-                    try evidenceRecorder.record(
-                        context: evidenceContext,
-                        exitCode: process.terminationStatus,
-                        endedAt: Date()
-                    )
-                } catch {
-                    evidenceSaveFailed = true
-                }
-            }
             Task { @MainActor [weak self] in
                 self?.finish(
                     key: key,
                     exitCode: process.terminationStatus,
-                    tail: tail,
-                    evidenceSaveFailed: evidenceSaveFailed
+                    tail: tail
                 )
             }
         }
@@ -231,18 +203,17 @@ final class ActionRunner: ObservableObject {
 
     private func append(_ text: String, to key: ActionRunKey) {
         guard var state = states[key] else { return }
-        state.output += PrivacySanitizer.note(text)
+        state.output += PrivacySanitizer.text(text)
         if state.output.count > 32_000 { state.output = String(state.output.suffix(32_000)) }
         states[key] = state
     }
 
-    private func finish(key: ActionRunKey, exitCode: Int32, tail: String, evidenceSaveFailed: Bool) {
+    private func finish(key: ActionRunKey, exitCode: Int32, tail: String) {
         append(tail, to: key)
         processes.removeValue(forKey: key)
         removeSession(for: key)
         let wasStopping = states[key]?.phase == .stopping
         states[key]?.phase = wasStopping ? .stopped : (exitCode == 0 ? .succeeded : .failed(exitCode))
-        states[key]?.evidenceSaveFailed = evidenceSaveFailed
         refreshHandler?()
     }
 

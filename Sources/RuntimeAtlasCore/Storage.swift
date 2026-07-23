@@ -4,8 +4,6 @@ import Foundation
 public struct RuntimeAtlasPaths: Sendable {
     public let directory: URL
     public let configurationFile: URL
-    public let evidenceFile: URL
-    public let runtimeBindingsFile: URL
     public let actionSessionsFile: URL
 
     public init(baseDirectory: URL? = nil) {
@@ -27,8 +25,6 @@ public struct RuntimeAtlasPaths: Sendable {
 
         directory = resolvedDirectory.standardizedFileURL
         configurationFile = directory.appendingPathComponent("configuration.json")
-        evidenceFile = directory.appendingPathComponent("evidence.json")
-        runtimeBindingsFile = directory.appendingPathComponent("runtime-bindings.json")
         actionSessionsFile = directory.appendingPathComponent("action-sessions.json")
     }
 }
@@ -229,26 +225,6 @@ private struct AtomicJSONFile<Document: Codable & Sendable>: Sendable {
     }
 }
 
-public enum DatabaseLabelError: LocalizedError, Equatable, Sendable {
-    case invalid
-
-    public var errorDescription: String? {
-        "Use 1-80 letters, numbers, periods, underscores, or hyphens."
-    }
-}
-
-public enum DatabaseLabelValidator {
-    public static func normalized(_ value: String) throws -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        guard trimmed.count <= 80,
-              trimmed.range(of: #"^[A-Za-z0-9._-]+$"#, options: .regularExpression) != nil else {
-            throw DatabaseLabelError.invalid
-        }
-        return trimmed
-    }
-}
-
 public struct ConfigurationStore: Sendable {
     private let file: AtomicJSONFile<RuntimeAtlasConfiguration>
     private let repositoryRootResolver: @Sendable (String) -> String?
@@ -301,34 +277,11 @@ public struct ConfigurationStore: Sendable {
         return root.isEmpty ? nil : PathUtilities.canonical(root)
     }
 
-    public func removeRepository(id: UUID, worktreePaths: [String] = []) throws {
-        let canonicalWorktrees = Set(worktreePaths.map(PathUtilities.canonical))
+    public func removeRepository(id: UUID) throws {
         try file.update { configuration in
-            let repositoryRoots = configuration.repositories
-                .filter { $0.id == id }
-                .map { PathUtilities.canonical($0.path) }
             configuration.repositories.removeAll { $0.id == id }
             configuration.customActions.removeAll { $0.repositoryID == id }
             configuration.worktreeOrderByRepository.removeValue(forKey: id.uuidString)
-            configuration.databaseLabels = configuration.databaseLabels.filter { path, _ in
-                let canonicalPath = PathUtilities.canonical(path)
-                if canonicalWorktrees.contains(canonicalPath) { return false }
-                return !repositoryRoots.contains {
-                    PathUtilities.isSameOrDescendant(canonicalPath, of: $0)
-                }
-            }
-        }
-    }
-
-    public func setDatabaseLabel(_ label: String, forWorktree path: String) throws {
-        let normalized = try DatabaseLabelValidator.normalized(label)
-        let canonical = PathUtilities.canonical(path)
-        try file.update { configuration in
-            if let normalized {
-                configuration.databaseLabels[canonical] = normalized
-            } else {
-                configuration.databaseLabels.removeValue(forKey: canonical)
-            }
         }
     }
 
@@ -369,28 +322,6 @@ public struct ConfigurationStore: Sendable {
     public func removeCustomAction(id: UUID) throws {
         try file.update { configuration in
             configuration.customActions.removeAll { $0.id == id }
-        }
-    }
-}
-
-public struct EvidenceStore: Sendable {
-    private let file: AtomicJSONFile<EvidenceDocument>
-
-    public init(paths: RuntimeAtlasPaths = RuntimeAtlasPaths()) {
-        file = AtomicJSONFile(
-            fileURL: paths.evidenceFile,
-            emptyDocument: { EvidenceDocument() },
-            damagedFileDescription: "The evidence file is damaged; no history is shown until the next evidence record is saved."
-        )
-    }
-
-    public func load() throws -> StoreLoad<EvidenceDocument> {
-        try file.load()
-    }
-
-    public func append(_ record: EvidenceRecord) throws {
-        try file.update { document in
-            document.records.append(record)
         }
     }
 }
@@ -440,129 +371,6 @@ public enum ActionSessionMatcher {
             return commandLine.contains("--session-id \(token.uuidString)")
         }
         return commandLine.contains("--cwd \(record.worktreePath) --")
-    }
-}
-
-public enum RuntimeBindingError: LocalizedError, Equatable, Sendable {
-    case invalidOwnerPID
-    case invalidContainerName
-
-    public var errorDescription: String? {
-        switch self {
-        case .invalidOwnerPID:
-            return "Owner PID must be a positive integer."
-        case .invalidContainerName:
-            return "Container name must be a Docker name without spaces or URLs."
-        }
-    }
-}
-
-public struct RuntimeBindingStore: Sendable {
-    private let file: AtomicJSONFile<RuntimeBindingDocument>
-
-    public init(paths: RuntimeAtlasPaths = RuntimeAtlasPaths()) {
-        file = AtomicJSONFile(
-            fileURL: paths.runtimeBindingsFile,
-            emptyDocument: { RuntimeBindingDocument() },
-            damagedFileDescription: "The runtime binding file is damaged; automatic resource links are hidden until the next registration."
-        )
-    }
-
-    public func load() throws -> StoreLoad<RuntimeBindingDocument> {
-        try file.load()
-    }
-
-    @discardableResult
-    public func linkDatabase(
-        label: String,
-        worktreePath: String,
-        containerName: String? = nil,
-        ownerPID: Int32? = nil,
-        registeredAt: Date = Date()
-    ) throws -> RuntimeBindingRecord {
-        let normalizedLabel = try DatabaseLabelValidator.normalized(label)
-        guard let normalizedLabel else { throw DatabaseLabelError.invalid }
-        let normalizedContainerName = try normalizeContainerName(containerName)
-        if let ownerPID, ownerPID <= 0 { throw RuntimeBindingError.invalidOwnerPID }
-
-        let canonicalPath = PathUtilities.canonical(worktreePath)
-        let record = RuntimeBindingRecord(
-            worktreePath: canonicalPath,
-            label: normalizedLabel,
-            containerName: normalizedContainerName,
-            ownerPID: ownerPID,
-            registeredAt: registeredAt
-        )
-        try file.update { document in
-            document.records.removeAll {
-                $0.kind == .database
-                    && PathUtilities.canonical($0.worktreePath) == canonicalPath
-                    && $0.ownerPID == ownerPID
-            }
-            document.records.append(record)
-        }
-        return record
-    }
-
-    private func normalizeContainerName(_ value: String?) throws -> String? {
-        guard let value else { return nil }
-        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty,
-              normalized.count <= 128,
-              normalized.range(
-                of: #"^[A-Za-z0-9][A-Za-z0-9_.-]*$"#,
-                options: .regularExpression
-              ) != nil else {
-            throw RuntimeBindingError.invalidContainerName
-        }
-        return normalized
-    }
-
-    public func unlinkDatabase(worktreePath: String, ownerPID: Int32? = nil) throws {
-        let canonicalPath = PathUtilities.canonical(worktreePath)
-        try file.update { document in
-            document.records.removeAll { record in
-                guard record.kind == .database,
-                      PathUtilities.canonical(record.worktreePath) == canonicalPath else {
-                    return false
-                }
-                guard let ownerPID else { return true }
-                return record.ownerPID == ownerPID
-            }
-        }
-    }
-}
-
-public enum RuntimeBindingEvaluator {
-    public static func activeDatabaseBinding(
-        records: [RuntimeBindingRecord],
-        worktreePath: String
-    ) -> RuntimeBindingRecord? {
-        activeDatabaseBinding(
-            records: records,
-            worktreePath: worktreePath,
-            processIsRunning: processIsRunning
-        )
-    }
-
-    public static func activeDatabaseBinding(
-        records: [RuntimeBindingRecord],
-        worktreePath: String,
-        processIsRunning: (Int32) -> Bool
-    ) -> RuntimeBindingRecord? {
-        let canonicalPath = PathUtilities.canonical(worktreePath)
-        return records
-            .filter {
-                $0.kind == .database
-                    && PathUtilities.canonical($0.worktreePath) == canonicalPath
-                    && ($0.ownerPID.map(processIsRunning) ?? true)
-            }
-            .max { $0.registeredAt < $1.registeredAt }
-    }
-
-    private static func processIsRunning(_ pid: Int32) -> Bool {
-        if Darwin.kill(pid, 0) == 0 { return true }
-        return errno == EPERM
     }
 }
 

@@ -4,7 +4,7 @@
 
 [Latest Release][releases] · [Download ZIP][zip]
 
-Runtime Atlas is a local-first native macOS app that shows which code is checked out in each Git worktree, which local listeners and Docker containers map to it, which logical DB profile label you assigned, and what evidence exists for the current SHA.
+Runtime Atlas is a local-first native macOS app that shows which code is checked out in each Git worktree and which local listeners and Docker containers map to it.
 
 ## What it does
 
@@ -13,12 +13,8 @@ Runtime Atlas is a local-first native macOS app that shows which code is checked
 - Map LISTEN TCP ports to a worktree when the process cwd is inside it.
 - Close a mapped listener from its process row after confirming the process name, PID, and ports.
 - Map running Docker containers when a host mount is inside the worktree; a missing CLI, stopped daemon, or permission failure stays a local partial error.
-- Store only a user-entered logical DB label such as `refactoring_test`.
-- Accept a project-reported DB display name through a provider-neutral CLI binding without reading its URL or credentials.
 - Turn repeated repository commands into local buttons, including one-time tasks and running sessions.
 - Recognize an already-running worktree server by its mapped LISTEN process when that session command enables listener detection.
-- Optionally save a run-once test, lint, or build command's exit result as SHA-bound PASS/FAIL evidence.
-- Record command, browser, and manual evidence against the exact worktree SHA; old-SHA evidence is displayed as `STALE` without changing the original record.
 - Export the same state as stable JSON through `runtime-atlas status --json`.
 - Use the full app in Korean or English and switch languages immediately from the macOS Settings window.
 - Check GitHub Releases while the app is open and install a newer verified `RuntimeAtlas.zip` with one click.
@@ -29,9 +25,9 @@ The first launch follows the primary macOS language (`ko` selects Korean; other 
 
 ## Privacy boundary
 
-Runtime Atlas reads Git metadata, `lsof` LISTEN results, process cwd where macOS permits it, and Docker container/mount/port metadata. It does **not** read `.env` files, third-party process environment variables, DB URLs, passwords, tokens, or database contents. Verification command stdout/stderr is passed directly to your terminal and is never stored. Command output is kept only in limited app memory while the app is open. Command names, templates, input definitions, and effect descriptions are stored locally, so do not put secrets in them. Common credential-shaped command arguments, note fragments, and URLs are redacted before evidence is written; do not intentionally put secrets in commands or notes. Network access is limited to checking and downloading releases from the fixed `kmg0308/runtime_atlas` GitHub repository. When you confirm **Close Port**, the app rechecks that the same PID, process name, worktree cwd, and displayed listening ports still match, then sends that process `SIGTERM`. It never escalates automatically to `SIGKILL` and does not stop Docker containers.
+Runtime Atlas reads Git metadata, `lsof` LISTEN results, process cwd where macOS permits it, and Docker container/mount/port metadata. It does **not** read `.env` files or third-party process environment variables. Command output is kept only in limited app memory while the app is open. Command names, templates, input definitions, and effect descriptions are stored locally, so do not put secrets in them. Network access is limited to checking and downloading releases from the fixed `kmg0308/runtime_atlas` GitHub repository. When you confirm **Close Port**, the app rechecks that the same PID, process name, worktree cwd, and displayed listening ports still match, then sends that process `SIGTERM`. It never escalates automatically to `SIGKILL` and does not stop Docker containers.
 
-Configuration and evidence are user-only, atomically replaced JSON files under:
+Configuration is stored in a user-only, atomically replaced JSON file under:
 
 ```text
 ~/Library/Application Support/Runtime Atlas/
@@ -44,8 +40,6 @@ There is no account, telemetry, cloud sync, server, AI agent, background daemon,
 Choose **Configure Commands** under a repository in the sidebar to add or edit its shared command definitions. Each worktree screen shows the same compact command buttons and runs them from that worktree, so configuration stays repository-wide while run/stop state remains isolated per worktree. Command text and output stay out of the way until confirmation or output review is needed. Runtime Atlas intentionally supports only one command with separate arguments—no pipelines, redirects, `&&`, shell expansion, schedules, or workflow builder.
 
 For a local server, create a **Keep running** command such as `npm run dev`. Runtime Atlas loads the normal login-shell environment, starts it from the selected worktree, shows limited live output, and can stop the process group that this app started. Closing Runtime Atlas stops its running sessions. Listener detection is enabled by default for existing and new worktree-based keep-running commands: if another terminal already has a LISTEN process whose cwd maps to that worktree, the button says **External · Running** instead of starting a duplicate. Close that process from **Runtime Status** after reviewing its PID and ports. You can turn listener detection off for a command that is not a server.
-
-For a non-destructive **Run once** test, lint, or build command, enable **Save the exit result as a verification record**. Runtime Atlas captures the branch, full SHA, and dirty state before launch, then records PASS for exit 0 or FAIL for any other exit code. Server commands and destructive commands cannot be marked as verification because their exit status does not reliably prove the selected code.
 
 For commands that need a value, add a whole-argument placeholder. For example:
 
@@ -64,7 +58,7 @@ Requirements: macOS 13 or later and a Swift 6 toolchain.
 open dist/RuntimeAtlas.app
 ```
 
-`verify.sh` compiles the SwiftPM test-consumer target, runs the executable `RuntimeAtlasSelfTest` suite, builds release app/CLI binaries, packages and ad-hoc signs the app, inspects ZIP/PKG payloads, exercises CLI exit/output and concurrent evidence writes, and validates the Release workflow contract.
+`verify.sh` compiles the SwiftPM test-consumer target, runs the executable `RuntimeAtlasSelfTest` suite, builds release app/CLI binaries, packages and ad-hoc signs the app, inspects ZIP/PKG payloads, exercises CLI JSON output, and validates the Release workflow contract.
 
 ## Install
 
@@ -104,27 +98,7 @@ Run commands from inside the worktree they belong to:
 ```bash
 runtime-atlas status --json
 runtime-atlas actions --json
-
-runtime-atlas link database \
-  --label local_project_test \
-  --worktree "$PWD" \
-  --container local-postgres \
-  --owner-pid "$$"
-
-runtime-atlas unlink database --worktree "$PWD" --owner-pid "$$"
-
-runtime-atlas verify -- swift test
-
-runtime-atlas record \
-  --kind manual \
-  --status BLOCKED \
-  --note "Native window could not be opened" \
-  --viewport 980x640
 ```
-
-`verify` streams the child command's stdout/stderr, returns its original exit code, and records `PASS` for exit 0 or `FAIL` otherwise. `record` accepts `browser` or `manual` and the explicit statuses `PASS`, `FAIL`, `BLOCKED`, or `PENDING`.
-
-`link database` is an optional integration contract for repository development scripts. It stores only the canonical worktree path, display label, optional Docker container name, optional owner PID, and registration time in `runtime-bindings.json`. It never accepts a DB URL or credentials. When a container name is registered, Runtime Atlas verifies it against the running containers already returned by Docker and shows that container even when it uses a named volume instead of mounting the worktree. Multiple worktrees may register the same shared container, and owner-scoped `unlink` removes only its own session. If no active binding exists, the app keeps using the manual DB display name.
 
 ## Automatic Release from main
 

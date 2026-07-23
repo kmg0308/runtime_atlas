@@ -47,9 +47,6 @@ struct WorktreeDetailView: View {
                         .environmentObject(model)
                 }
 
-                DatabaseLabelEditor(worktree: worktree)
-                    .environmentObject(model)
-
                 SectionCard(
                     title: copy.runtimeMap,
                     subtitle: copy.runtimeMapSubtitle
@@ -61,12 +58,6 @@ struct WorktreeDetailView: View {
                     )
                 }
 
-                SectionCard(
-                    title: copy.evidence,
-                    subtitle: copy.evidenceSubtitle
-                ) {
-                    EvidenceSection(worktree: worktree)
-                }
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 24)
@@ -188,90 +179,6 @@ private struct SectionCard<Content: View>: View {
     }
 }
 
-private struct DatabaseLabelEditor: View {
-    @EnvironmentObject private var model: AtlasAppModel
-    @Environment(\.atlasCopy) private var copy
-    let worktree: WorktreeStatus
-    @State private var databaseLabel = ""
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let binding = worktree.databaseBinding {
-                HStack(spacing: 7) {
-                    Image(systemName: "link.circle.fill")
-                        .foregroundStyle(RuntimeAtlasTheme.mint)
-                    Text(copy.automaticDBDetails(binding.label))
-                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .medium))
-                        .lineLimit(2)
-                }
-            }
-
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
-                    databaseLabelTitle
-                    databaseField
-                    saveDatabaseButton
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    databaseLabelTitle
-                    HStack(spacing: 8) {
-                        databaseField
-                        saveDatabaseButton
-                    }
-                }
-            }
-        }
-        .padding(14)
-        .atlasSurface()
-        .onAppear {
-            databaseLabel = worktree.manualDatabaseLabel ?? ""
-        }
-        .onChange(of: worktree.manualDatabaseLabel) { value in
-            databaseLabel = value ?? ""
-        }
-        .onChange(of: worktree.path) { _ in
-            databaseLabel = worktree.manualDatabaseLabel ?? ""
-        }
-    }
-
-    private var databaseLabelTitle: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(copy.logicalDBLabel)
-                .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
-            Text(copy.logicalDBDescription)
-                .font(.system(size: RuntimeAtlasTheme.Typography.caption))
-                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-                .lineLimit(2)
-        }
-        .frame(minWidth: 160, alignment: .leading)
-    }
-
-    private var databaseField: some View {
-        TextField(copy.logicalDBPlaceholder, text: $databaseLabel)
-            .textFieldStyle(.plain)
-            .font(.system(size: RuntimeAtlasTheme.Typography.secondary, design: .monospaced))
-            .padding(.horizontal, 11)
-            .frame(height: RuntimeAtlasTheme.controlHeight)
-            .background {
-                RoundedRectangle(cornerRadius: RuntimeAtlasTheme.controlRadius, style: .continuous)
-                    .fill(RuntimeAtlasTheme.control)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: RuntimeAtlasTheme.controlRadius, style: .continuous)
-                            .stroke(RuntimeAtlasTheme.border)
-                    }
-            }
-            .accessibilityLabel(copy.logicalDBLabel)
-    }
-
-    private var saveDatabaseButton: some View {
-        Button(copy.save) {
-            _ = model.saveDatabaseLabel(databaseLabel, for: worktree)
-        }
-        .buttonStyle(AtlasButtonStyle(prominent: true))
-        .accessibilityLabel(copy.saveLogicalDBLabel)
-    }
-}
-
 private struct RuntimeMapSection: View {
     @EnvironmentObject private var model: AtlasAppModel
     @Environment(\.atlasCopy) private var copy
@@ -287,9 +194,7 @@ private struct RuntimeMapSection: View {
                 title: URL(fileURLWithPath: worktree.path).lastPathComponent,
                 detail: worktree.detached ? copy.detachedAt(worktree.shortSHA) : "\(worktree.branch ?? copy.unknownBranch) @ \(worktree.shortSHA)",
                 color: RuntimeAtlasTheme.accent,
-                badges: worktree.databaseBinding.map { [copy.automaticDBBadge($0.label)] }
-                    ?? worktree.databaseLabel.map { ["DB  \($0)"] }
-                    ?? []
+                badges: []
             )
 
             if processDiscovery.state == .unavailable {
@@ -535,204 +440,6 @@ private struct PortChip: View {
     }
 }
 
-private struct EvidenceSection: View {
-    @Environment(\.atlasCopy) private var copy
-    let worktree: WorktreeStatus
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 7) {
-                    allEvidenceBadges
-                    Spacer()
-                    currentSHALabel
-                }
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 7) {
-                        EvidenceCountBadge(status: .pass, count: worktree.evidence.currentCounts.pass)
-                        EvidenceCountBadge(status: .fail, count: worktree.evidence.currentCounts.fail)
-                    }
-                    HStack(spacing: 7) {
-                        EvidenceCountBadge(status: .blocked, count: worktree.evidence.currentCounts.blocked)
-                        EvidenceCountBadge(status: .pending, count: worktree.evidence.currentCounts.pending)
-                        Spacer()
-                        currentSHALabel
-                    }
-                }
-            }
-
-            if let latest = worktree.evidence.latestCurrent {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(copy.latestCurrentEvidence)
-                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .semibold))
-                        .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-                    EvidenceRow(evidence: latest, currentSHA: worktree.sha)
-                }
-                .padding(12)
-                .background {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(RuntimeAtlasTheme.control.opacity(0.70))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .stroke(RuntimeAtlasTheme.border)
-                        }
-                }
-            } else {
-                InlineNotice(
-                    icon: "checkmark.seal",
-                    title: copy.noCurrentEvidence,
-                    message: copy.runEvidenceCommand,
-                    color: RuntimeAtlasTheme.slate
-                )
-            }
-
-            Divider().overlay(RuntimeAtlasTheme.border)
-
-            VStack(alignment: .leading, spacing: 9) {
-                Text(copy.history)
-                    .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .semibold))
-
-                if worktree.evidence.history.isEmpty {
-                    Text(copy.noEvidenceHistory)
-                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
-                        .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-                        .padding(.vertical, 4)
-                } else {
-                    ForEach(worktree.evidence.history) { evidence in
-                        EvidenceRow(evidence: evidence, currentSHA: worktree.sha)
-                        if evidence.id != worktree.evidence.history.last?.id {
-                            Divider().overlay(RuntimeAtlasTheme.border)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder private var allEvidenceBadges: some View {
-        EvidenceCountBadge(status: .pass, count: worktree.evidence.currentCounts.pass)
-        EvidenceCountBadge(status: .fail, count: worktree.evidence.currentCounts.fail)
-        EvidenceCountBadge(status: .blocked, count: worktree.evidence.currentCounts.blocked)
-        EvidenceCountBadge(status: .pending, count: worktree.evidence.currentCounts.pending)
-    }
-
-    private var currentSHALabel: some View {
-        Text(copy.currentSHA)
-            .font(.system(size: RuntimeAtlasTheme.Typography.badge, weight: .bold, design: .monospaced))
-            .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
-    }
-}
-
-private struct EvidenceCountBadge: View {
-    @Environment(\.atlasCopy) private var copy
-    let status: EvidenceDisplayStatus
-    let count: Int
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: status.icon)
-            Text(copy.evidenceDisplayStatusLabel(status))
-            Text("\(count)")
-                .fontWeight(.bold)
-        }
-        .font(.system(size: RuntimeAtlasTheme.Typography.badge, weight: .semibold, design: .monospaced))
-        .foregroundStyle(status.color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(status.color.opacity(0.09))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .stroke(status.color.opacity(0.24))
-                }
-        }
-        .accessibilityLabel(copy.currentSHARecordCount(status: status, count: count))
-    }
-}
-
-private struct EvidenceRow: View {
-    @Environment(\.atlasCopy) private var copy
-    let evidence: EvidencePresentation
-    let currentSHA: String
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 10) {
-                evidenceBadge.frame(width: 170, alignment: .leading)
-                evidenceDetails
-                Spacer(minLength: 0)
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                evidenceBadge
-                evidenceDetails
-            }
-        }
-        .padding(.vertical, 3)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(evidenceAccessibilityLabel)
-    }
-
-    private var evidenceBadge: some View {
-        AtlasBadge(
-            text: copy.evidenceDisplayStatusLabel(evidence.displayStatus),
-            icon: evidence.displayStatus.icon,
-            color: evidence.displayStatus.color
-        )
-    }
-
-    private var evidenceDetails: some View {
-        VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 7) {
-                    Text(copy.evidenceKind(evidence.record.kind))
-                        .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .semibold, design: .monospaced))
-                    Text(copy.format(evidence.record.endedAt))
-                        .font(.system(size: RuntimeAtlasTheme.Typography.caption))
-                        .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-                    if let exitCode = evidence.record.exitCode {
-                        Text(copy.exitCode(exitCode))
-                            .font(.system(size: RuntimeAtlasTheme.Typography.badge, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(exitCode == 0 ? RuntimeAtlasTheme.mint : RuntimeAtlasTheme.red)
-                    }
-                }
-
-                if let command = evidence.record.command {
-                    Text(command.joined(separator: " "))
-                        .font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
-                        .foregroundStyle(RuntimeAtlasTheme.primaryText)
-                        .lineLimit(3)
-                        .textSelection(.enabled)
-                }
-                if let note = evidence.record.note {
-                    Text(note)
-                        .font(.system(size: RuntimeAtlasTheme.Typography.secondary))
-                        .foregroundStyle(RuntimeAtlasTheme.primaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                }
-
-                HStack(spacing: 8) {
-                    Text(String(evidence.record.sha.prefix(7)))
-                        .font(.system(size: RuntimeAtlasTheme.Typography.badge, design: .monospaced))
-                    Text(evidence.record.dirty ? copy.dirtyAtRecordTime : copy.cleanAtRecordTime)
-                    if let viewport = evidence.record.viewport {
-                        Text(copy.viewport(viewport))
-                    }
-                    if evidence.displayStatus == .stale {
-                        Text(copy.wasStatus(evidence.record.status))
-                            .foregroundStyle(evidence.record.status.displayColor)
-                    }
-                }
-                .font(.system(size: RuntimeAtlasTheme.Typography.badge))
-                .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
-        }
-    }
-
-    private var evidenceAccessibilityLabel: String {
-        copy.evidenceAccessibility(evidence)
-    }
-}
-
 struct InlineNotice: View {
     let icon: String
     let title: String
@@ -791,38 +498,5 @@ struct AtlasBadge: View {
                 }
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-private extension EvidenceDisplayStatus {
-    var color: Color {
-        switch self {
-        case .pass: RuntimeAtlasTheme.mint
-        case .fail: RuntimeAtlasTheme.red
-        case .blocked: RuntimeAtlasTheme.amber
-        case .pending: RuntimeAtlasTheme.slate
-        case .stale: RuntimeAtlasTheme.accent
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .pass: "checkmark.circle.fill"
-        case .fail: "xmark.circle.fill"
-        case .blocked: "exclamationmark.octagon.fill"
-        case .pending: "clock.fill"
-        case .stale: "arrow.triangle.2.circlepath"
-        }
-    }
-}
-
-private extension EvidenceStatus {
-    var displayColor: Color {
-        switch self {
-        case .pass: RuntimeAtlasTheme.mint
-        case .fail: RuntimeAtlasTheme.red
-        case .blocked: RuntimeAtlasTheme.amber
-        case .pending: RuntimeAtlasTheme.slate
-        }
     }
 }

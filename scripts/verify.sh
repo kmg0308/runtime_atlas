@@ -159,95 +159,25 @@ git init -q -b main "$QA_REPO"
 git -C "$QA_REPO" -c user.name='Runtime Atlas Tests' -c user.email='runtime-atlas-tests@example.invalid' \
     commit -q --allow-empty -m initial
 
-set +e
-QA_OUTPUT="$(cd "$QA_REPO" && RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" verify -- \
-    /bin/sh -c 'printf atlas-cli-output; printf atlas-cli-error >&2; exit 7' 2>"$QA_PARENT/stderr")"
-QA_EXIT=$?
-set -e
-test "$QA_EXIT" -eq 7
-test "$QA_OUTPUT" = "atlas-cli-output"
-test "$(cat "$QA_PARENT/stderr")" = "atlas-cli-error"
-
-(cd "$QA_REPO" && RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" verify -- /usr/bin/true)
-(cd "$QA_REPO" && RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" record \
-    --kind manual --status BLOCKED --note 'Native app observation blocked' --viewport 980x640)
-(cd "$QA_REPO" && RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" record \
-    --kind browser --status PENDING --note 'Browser evidence pending')
-
-RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" link database \
-    --label cli_test --worktree "$QA_REPO" --container local-postgres
-python3 - "$QA_DATA/runtime-bindings.json" "$QA_REPO" <<'PY'
-import json, pathlib, sys
-data = json.loads(pathlib.Path(sys.argv[1]).read_text())
-records = data.get("records", [])
-if len(records) != 1 or records[0].get("label") != "cli_test" or records[0].get("worktreePath") != sys.argv[2] or records[0].get("containerName") != "local-postgres":
-    raise SystemExit(f"runtime binding mismatch: {records}")
-PY
-RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" unlink database --worktree "$QA_REPO"
-test "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["records"]))' "$QA_DATA/runtime-bindings.json")" -eq 0
-
-set +e
-RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" link database \
-    --label 'postgresql://example.invalid/private' --worktree "$QA_REPO" \
-    >"$QA_PARENT/binding-privacy-stdout" 2>"$QA_PARENT/binding-privacy-stderr"
-BINDING_PRIVACY_EXIT=$?
-set -e
-test "$BINDING_PRIVACY_EXIT" -ne 0
-test ! -s "$QA_PARENT/binding-privacy-stdout"
-
-set +e
-(cd "$QA_PARENT" && RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" record \
-    --kind manual --status PENDING --note 'Outside worktree' \
-    >"$QA_PARENT/outside-stdout" 2>"$QA_PARENT/outside-stderr")
-OUTSIDE_EXIT=$?
-(cd "$QA_REPO" && RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" record \
-    --kind manual --status PENDING \
-    >"$QA_PARENT/usage-stdout" 2>"$QA_PARENT/usage-stderr")
-USAGE_EXIT=$?
-set -e
-test "$OUTSIDE_EXIT" -eq 2
-test "$USAGE_EXIT" -eq 64
-grep -q 'not inside an available Git worktree' "$QA_PARENT/outside-stderr"
-grep -q '^Usage: runtime-atlas record' "$QA_PARENT/usage-stderr"
-
-for index in 1 2 3 4 5 6 7 8; do
-    (cd "$QA_REPO" && RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" record \
-        --kind manual --status PENDING --note "parallel-$index" >/dev/null) &
-done
-wait
-
 RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" status --json > "$QA_PARENT/status.json"
 RUNTIME_ATLAS_HOME="$QA_DATA" "$CLI_HELPER" actions --json > "$QA_PARENT/actions.json"
 python3 -m json.tool "$QA_PARENT/status.json" >/dev/null
 python3 -m json.tool "$QA_PARENT/actions.json" >/dev/null
-python3 - "$QA_PARENT/actions.json" <<'PY'
-import json, pathlib, sys
-data = json.loads(pathlib.Path(sys.argv[1]).read_text())
-if data != {"actions": [], "schemaVersion": 1}:
-    raise SystemExit(f"actions --json schema mismatch: {data}")
-PY
-python3 - "$QA_DATA/evidence.json" "$QA_PARENT/status.json" <<'PY'
+python3 - "$QA_PARENT/status.json" "$QA_PARENT/actions.json" <<'PY'
 import json
 import pathlib
 import sys
 
-evidence = json.loads(pathlib.Path(sys.argv[1]).read_text())
-status = json.loads(pathlib.Path(sys.argv[2]).read_text())
-records = evidence["records"]
-if len(records) != 12:
-    raise SystemExit(f"expected 12 CLI evidence records, found {len(records)}")
-values = {record["status"] for record in records}
-if not {"PASS", "FAIL", "BLOCKED", "PENDING"}.issubset(values):
-    raise SystemExit(f"missing evidence statuses: {values}")
-failed = [record for record in records if record["status"] == "FAIL"]
-if len(failed) != 1 or failed[0].get("command") != ["/bin/sh", "-c", "<redacted-shell-script>"]:
-    raise SystemExit(f"shell command body was not redacted: {failed}")
+status = json.loads(pathlib.Path(sys.argv[1]).read_text())
+actions = json.loads(pathlib.Path(sys.argv[2]).read_text())
 if status.get("schemaVersion") != 1 or not isinstance(status.get("repositories"), list):
     raise SystemExit("status --json schema mismatch")
+if actions != {"actions": [], "schemaVersion": 1}:
+    raise SystemExit(f"actions --json schema mismatch: {actions}")
 PY
 
-if grep -R -E 'DATABASE_URL|TEST_DATABASE_URL|\.env($|[^A-Za-z])' Sources Tests; then
-    echo "Source must not inspect DB URLs or .env files" >&2
+if grep -R -E '\.env($|[^A-Za-z])' Sources Tests; then
+    echo "Source must not inspect .env files" >&2
     exit 1
 fi
 

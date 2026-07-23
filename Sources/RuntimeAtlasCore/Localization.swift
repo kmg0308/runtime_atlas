@@ -80,32 +80,18 @@ public struct AtlasCopy: Sendable {
     }
     public var addRepositoryEmptyDescription: String {
         value(
-            english: "Add a Git repository to connect code versions with processes, ports, containers, a DB display name, and verification records.",
-            korean: "Git 저장소를 추가해 코드 버전과 프로세스, 포트, 컨테이너, DB 구분 이름, 검증 기록을 연결하세요."
+            english: "Add a Git repository to connect code versions with processes, ports, and containers.",
+            korean: "Git 저장소를 추가해 코드 버전과 프로세스, 포트, 컨테이너를 연결하세요."
         )
     }
 
     public var localDataIssue: String { value(english: "Local data issue", korean: "로컬 데이터 문제") }
     public var notice: String { value(english: "Notice", korean: "알림") }
-    public var code: String { value(english: "Code", korean: "코드") }
-    public var codeSubtitle: String {
-        value(
-            english: "The selected code version and a local-only DB display name.",
-            korean: "선택한 코드 버전과 로컬에서만 쓰는 DB 구분 이름입니다."
-        )
-    }
     public var runtimeMap: String { value(english: "Runtime Status", korean: "실행 상태") }
     public var runtimeMapSubtitle: String {
         value(
             english: "Processes, containers, and open ports linked to this working folder.",
             korean: "이 작업 폴더와 연결된 프로세스, 컨테이너와 열린 포트를 보여줍니다."
-        )
-    }
-    public var evidence: String { value(english: "Verification Records", korean: "검증 기록") }
-    public var evidenceSubtitle: String {
-        value(
-            english: "Selected test, lint, and build commands save PASS or FAIL for the exact code version.",
-            korean: "선택한 테스트·린트·빌드 명령어의 PASS 또는 FAIL을 정확한 코드 버전에 기록합니다."
         )
     }
     public var actions: String { value(english: "Commands", korean: "명령어") }
@@ -177,18 +163,6 @@ public struct AtlasCopy: Sendable {
             korean: "서버 명령어에 사용합니다. 이 작업 폴더를 실행 위치(cwd)로 사용하며 TCP 포트를 연 프로세스가 있으면 외부 실행으로 표시합니다."
         )
     }
-    public var recordVerificationEvidence: String {
-        value(english: "Save the exit result as a verification record", korean: "종료 결과를 검증 기록으로 저장")
-    }
-    public var recordVerificationEvidenceHelp: String {
-        value(
-            english: "For tests, lint, or builds. Exit 0 records PASS; any other exit records FAIL for the exact current SHA.",
-            korean: "테스트·린트·빌드 명령어에 사용합니다. 종료 0은 현재 SHA의 PASS, 그 외는 FAIL로 기록합니다."
-        )
-    }
-    public var evidenceSaveFailed: String {
-        value(english: "Finished, but the verification record could not be saved.", korean: "명령은 끝났지만 검증 기록을 저장하지 못했습니다.")
-    }
     public var succeeded: String { value(english: "Finished", korean: "완료") }
     public var stopped: String { value(english: "Stopped", korean: "중지됨") }
     public func failedExit(_ code: Int32) -> String { value(english: "Failed (exit \(code))", korean: "실패 (종료 \(code))") }
@@ -237,32 +211,7 @@ public struct AtlasCopy: Sendable {
         value(english: "Present (Git dirty)", korean: "있음(Git dirty)")
     }
     public var cleanWorkingTree: String { value(english: "None (Git clean)", korean: "없음(Git clean)") }
-    public var logicalDBLabel: String {
-        value(english: "DB display name", korean: "DB 구분 이름")
-    }
-    public var logicalDBDescription: String {
-        value(
-            english: "Projects can report the current name automatically; this field is a manual fallback. DB URLs and credentials are never stored.",
-            korean: "프로젝트가 현재 이름을 자동으로 알려줄 수 있으며, 이 입력은 수동 대체값입니다. DB URL이나 인증 정보는 저장하지 않습니다."
-        )
-    }
-    public var automaticDBLinked: String {
-        value(english: "Current DB reported automatically", korean: "현재 DB 자동 연결됨")
-    }
-    public func automaticDBDetails(_ label: String) -> String {
-        value(
-            english: "The repository's development command reported \(label). The manual name below remains unchanged.",
-            korean: "저장소의 개발 명령이 \(label)을(를) 알려줬습니다. 아래 수동 이름은 그대로 유지됩니다."
-        )
-    }
-    public func automaticDBBadge(_ label: String) -> String {
-        value(english: "DB AUTO  \(label)", korean: "DB 자동  \(label)")
-    }
-    public var logicalDBPlaceholder: String { value(english: "e.g. refactoring_test", korean: "예: refactoring_test") }
     public var save: String { value(english: "Save", korean: "저장") }
-    public var saveLogicalDBLabel: String {
-        value(english: "Save DB display name", korean: "DB 구분 이름 저장")
-    }
     public var unavailableValue: String { value(english: "Unavailable", korean: "사용 불가") }
     public func detachedAt(_ sha: String) -> String {
         value(english: "Detached at \(sha)", korean: "\(sha)에서 분리됨")
@@ -314,52 +263,6 @@ public struct AtlasCopy: Sendable {
         value(english: "Runtime status for \(name)", korean: "\(name)의 실행 상태")
     }
 
-    public var currentSHA: String { value(english: "CURRENT CODE", korean: "현재 코드") }
-    public var latestCurrentEvidence: String {
-        value(english: "Latest verification for current code", korean: "현재 코드의 최신 검증")
-    }
-    public var noCurrentEvidence: String {
-        value(english: "No verification for current code", korean: "현재 코드의 검증 기록 없음")
-    }
-    public var runEvidenceCommand: String {
-        value(
-            english: "Enable verification recording for a run-once command, use runtime-atlas verify, or record a browser/manual result.",
-            korean: "한 번 실행 명령어에서 검증 기록을 켜거나 runtime-atlas verify 또는 브라우저/수동 기록을 사용하세요."
-        )
-    }
-    public var history: String { value(english: "All records", korean: "전체 기록") }
-    public var noEvidenceHistory: String {
-        value(english: "No evidence has been recorded for this worktree.", korean: "이 워크트리에 기록된 증거가 없습니다.")
-    }
-    public func currentSHARecordCount(status: EvidenceDisplayStatus, count: Int) -> String {
-        value(
-            english: "\(evidenceDisplayStatusLabel(status)), \(count) records for current code",
-            korean: "\(evidenceDisplayStatusLabel(status)), 현재 코드 기록 \(count)개"
-        )
-    }
-    public func evidenceKind(_ kind: EvidenceKind) -> String {
-        switch (language, kind) {
-        case (.korean, .command): "명령"
-        case (.korean, .browser): "브라우저"
-        case (.korean, .manual): "수동"
-        case (.english, _): kind.rawValue.uppercased()
-        }
-    }
-    public func exitCode(_ code: Int32) -> String {
-        value(english: "EXIT \(code)", korean: "종료 코드 \(code)")
-    }
-    public var dirtyAtRecordTime: String {
-        value(english: "dirty at record time", korean: "기록 당시 변경 있음")
-    }
-    public var cleanAtRecordTime: String {
-        value(english: "clean at record time", korean: "기록 당시 깨끗함")
-    }
-    public func viewport(_ viewport: String) -> String {
-        value(english: "viewport \(viewport)", korean: "화면 크기 \(viewport)")
-    }
-    public func wasStatus(_ status: EvidenceStatus) -> String {
-        value(english: "recorded as \(evidenceStatusLabel(status))", korean: "기록 상태 \(evidenceStatusLabel(status))")
-    }
     public func processLocation(pid: Int32, cwd: String?) -> String {
         let location = cwd ?? cwdUnavailable
         return value(
@@ -367,48 +270,6 @@ public struct AtlasCopy: Sendable {
             korean: "PID \(pid) · 실행 위치(cwd): \(location)"
         )
     }
-    public func evidenceDisplayStatusLabel(_ status: EvidenceDisplayStatus) -> String {
-        switch (language, status) {
-        case (.korean, .pass): "통과 · PASS"
-        case (.korean, .fail): "실패 · FAIL"
-        case (.korean, .blocked): "진행 불가 · BLOCKED"
-        case (.korean, .pending): "확인 전 · PENDING"
-        case (.korean, .stale): "이전 코드 · STALE"
-        case (.english, .pass): "Passed · PASS"
-        case (.english, .fail): "Failed · FAIL"
-        case (.english, .blocked): "Blocked · BLOCKED"
-        case (.english, .pending): "Not checked · PENDING"
-        case (.english, .stale): "Previous code · STALE"
-        }
-    }
-    public func evidenceStatusLabel(_ status: EvidenceStatus) -> String {
-        switch status {
-        case .pass: evidenceDisplayStatusLabel(.pass)
-        case .fail: evidenceDisplayStatusLabel(.fail)
-        case .blocked: evidenceDisplayStatusLabel(.blocked)
-        case .pending: evidenceDisplayStatusLabel(.pending)
-        }
-    }
-    public func evidenceAccessibility(_ evidence: EvidencePresentation) -> String {
-        let stale = evidence.displayStatus == .stale
-            ? value(
-                english: ", recorded status \(evidenceStatusLabel(evidence.record.status))",
-                korean: ", 기록 상태 \(evidenceStatusLabel(evidence.record.status))"
-            )
-            : ""
-        return value(
-            english: "\(evidenceDisplayStatusLabel(evidence.displayStatus)) \(evidence.record.kind.rawValue) verification\(stale), code version \(evidence.record.sha.prefix(7))",
-            korean: "\(evidenceDisplayStatusLabel(evidence.displayStatus)) \(evidenceKind(evidence.record.kind)) 검증\(stale), 코드 버전 \(evidence.record.sha.prefix(7))"
-        )
-    }
-    public func format(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = language.locale
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-
     public var settingsTitle: String { value(english: "Language", korean: "언어") }
     public var settingsDescription: String {
         value(
@@ -444,19 +305,6 @@ public struct AtlasCopy: Sendable {
     public var repositoryRemoveFailed: String {
         value(english: "Repository could not be removed.", korean: "저장소를 제거하지 못했습니다.")
     }
-    public var logicalDBSaved: String {
-        value(english: "Logical DB label saved.", korean: "논리 DB 라벨을 저장했습니다.")
-    }
-    public var logicalDBSaveFailed: String {
-        value(english: "Logical DB label could not be saved.", korean: "논리 DB 라벨을 저장하지 못했습니다.")
-    }
-    public var logicalDBValidation: String {
-        value(
-            english: "Use 1-80 letters, numbers, periods, underscores, or hyphens.",
-            korean: "영문자, 숫자, 마침표, 밑줄 또는 하이픈을 1~80자로 입력하세요."
-        )
-    }
-
     public var updates: String { value(english: "Updates", korean: "업데이트") }
     public var checkForUpdates: String {
         value(english: "Check for Updates", korean: "업데이트 확인")
@@ -607,7 +455,6 @@ public struct AtlasCopy: Sendable {
         "Runtime Atlas local data is busy or cannot be locked.": "Runtime Atlas 로컬 데이터가 사용 중이거나 잠글 수 없습니다.",
         "Runtime Atlas could not save local data.": "Runtime Atlas가 로컬 데이터를 저장하지 못했습니다.",
         "The repository configuration file is damaged; an empty configuration is being used until the next save.": "저장소 설정 파일이 손상되어 다음 저장 전까지 빈 설정을 사용합니다.",
-        "The evidence file is damaged; no history is shown until the next evidence record is saved.": "증거 파일이 손상되어 다음 증거를 저장할 때까지 기록을 표시하지 않습니다.",
-        "The runtime binding file is damaged; automatic resource links are hidden until the next registration.": "실행 연결 파일이 손상되어 다음 등록 전까지 자동 자원 연결을 표시하지 않습니다."
+        "The command session file is damaged; running command buttons may need to be started again.": "명령 세션 파일이 손상되어 실행 중인 명령 버튼을 다시 시작해야 할 수 있습니다."
     ]
 }

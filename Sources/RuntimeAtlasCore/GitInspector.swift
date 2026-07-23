@@ -80,14 +80,6 @@ public struct InspectedRepository: Equatable, Sendable {
     public let worktrees: [InspectedWorktree]
 }
 
-public enum CurrentWorktreeError: LocalizedError, Sendable {
-    case notInsideWorktree
-
-    public var errorDescription: String? {
-        "The current directory is not inside an available Git worktree."
-    }
-}
-
 public struct GitInspector: Sendable {
     private let executor: CommandExecutor
 
@@ -137,41 +129,6 @@ public struct GitInspector: Sendable {
             availability: .available,
             unavailableReason: nil,
             worktrees: worktrees
-        )
-    }
-
-    public func currentWorktree(at directory: URL) throws -> CurrentWorktree {
-        let workingDirectory = directory.standardizedFileURL
-        let rootResult = try executor.run(
-            executable: ExecutableLocator.git,
-            arguments: ["--no-optional-locks", "-C", workingDirectory.path, "rev-parse", "--show-toplevel"]
-        )
-        guard rootResult.exitCode == 0 else { throw CurrentWorktreeError.notInsideWorktree }
-
-        let path = PathUtilities.canonical(rootResult.standardOutput.trimmed)
-        guard !path.isEmpty else { throw CurrentWorktreeError.notInsideWorktree }
-
-        let shaResult = try executor.run(
-            executable: ExecutableLocator.git,
-            arguments: ["--no-optional-locks", "-C", path, "rev-parse", "HEAD"]
-        )
-        guard shaResult.exitCode == 0 else { throw CurrentWorktreeError.notInsideWorktree }
-
-        let branchResult = try executor.run(
-            executable: ExecutableLocator.git,
-            arguments: ["--no-optional-locks", "-C", path, "symbolic-ref", "--quiet", "--short", "HEAD"]
-        )
-        let statusResult = try executor.run(
-            executable: ExecutableLocator.git,
-            arguments: ["--no-optional-locks", "-C", path, "status", "--porcelain", "--untracked-files=normal"]
-        )
-        guard statusResult.exitCode == 0 else { throw CurrentWorktreeError.notInsideWorktree }
-
-        return CurrentWorktree(
-            path: path,
-            branch: branchResult.exitCode == 0 ? branchResult.standardOutput.trimmed.nilIfEmpty : nil,
-            sha: shaResult.standardOutput.trimmed,
-            dirty: !statusResult.standardOutput.isEmpty
         )
     }
 

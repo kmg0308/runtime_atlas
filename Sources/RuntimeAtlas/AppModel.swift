@@ -104,10 +104,7 @@ final class AtlasAppModel: ObservableObject {
 
     func removeRepository(_ repository: RepositoryStatus) {
         do {
-            try configurationStore.removeRepository(
-                id: repository.id,
-                worktreePaths: repository.worktrees.map(\.path)
-            )
+            try configurationStore.removeRepository(id: repository.id)
             if repository.worktrees.contains(where: { $0.path == selectedWorktreePath }) {
                 selectedWorktreePath = nil
             }
@@ -116,25 +113,6 @@ final class AtlasAppModel: ObservableObject {
             operationMessage = copy.localizedCoreMessage(error.errorDescription ?? copy.repositoryRemoveFailed)
         } catch {
             operationMessage = copy.repositoryRemoveFailed
-        }
-    }
-
-    @discardableResult
-    func saveDatabaseLabel(_ label: String, for worktree: WorktreeStatus) -> Bool {
-        do {
-            try configurationStore.setDatabaseLabel(label, forWorktree: worktree.path)
-            refresh()
-            operationMessage = copy.logicalDBSaved
-            return true
-        } catch DatabaseLabelError.invalid {
-            operationMessage = copy.logicalDBValidation
-            return false
-        } catch let error as LocalizedError {
-            operationMessage = copy.localizedCoreMessage(error.errorDescription ?? copy.logicalDBSaveFailed)
-            return false
-        } catch {
-            operationMessage = copy.logicalDBSaveFailed
-            return false
         }
     }
 

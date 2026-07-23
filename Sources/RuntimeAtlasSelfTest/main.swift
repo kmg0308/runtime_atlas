@@ -91,47 +91,6 @@ private func makeGitRepository(in parent: URL, name: String = "repository") thro
     return repository
 }
 
-private func makeEvidence(
-    kind: EvidenceKind = .command,
-    status: EvidenceStatus,
-    path: String,
-    sha: String,
-    endedAt: Date,
-    note: String? = nil
-) -> EvidenceRecord {
-    EvidenceRecord(
-        kind: kind,
-        status: status,
-        worktreePath: path,
-        branch: "main",
-        sha: sha,
-        dirty: false,
-        command: kind == .command ? ["/usr/bin/true"] : nil,
-        exitCode: kind == .command ? (status == .pass ? 0 : 1) : nil,
-        startedAt: endedAt.addingTimeInterval(-1),
-        endedAt: endedAt,
-        note: note,
-        viewport: nil
-    )
-}
-
-private final class FailureCollector: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage: [String] = []
-
-    func append(_ error: Error) {
-        lock.lock()
-        storage.append(String(describing: error))
-        lock.unlock()
-    }
-
-    var values: [String] {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage
-    }
-}
-
 private final class SignalCapture: @unchecked Sendable {
     private let lock = NSLock()
     private let result: Int32
@@ -554,12 +513,6 @@ suite.run("Runtime process and container mapping") {
     let repository = try makeGitRepository(in: temporary.url)
     let paths = RuntimeAtlasPaths(baseDirectory: temporary.url.appendingPathComponent("data"))
     try ConfigurationStore(paths: paths).addRepository(path: repository.path)
-    try ConfigurationStore(paths: paths).setDatabaseLabel("manual_fallback", forWorktree: repository.path)
-    try RuntimeBindingStore(paths: paths).linkDatabase(
-        label: "reported_test",
-        worktreePath: repository.path,
-        containerName: "database"
-    )
 
     let processExecutor = CommandExecutor { _, arguments, _ in
         if arguments.contains("-iTCP") {
@@ -580,13 +533,13 @@ suite.run("Runtime process and container mapping") {
         case "info":
             return CommandResult(exitCode: 0, standardOutput: "29.0", standardError: "")
         case "ps":
-            return CommandResult(exitCode: 0, standardOutput: "abc123\ndb456\n", standardError: "")
+            return CommandResult(exitCode: 0, standardOutput: "abc123\ncache456\n", standardError: "")
         default:
             let json = """
             [{"Id":"abc123","Name":"/web","Config":{"Image":"web"},
             "Mounts":[{"Source":"\(repository.path)","Destination":"/workspace"}],
             "NetworkSettings":{"Ports":{}}},
-            {"Id":"db456","Name":"/database","Config":{"Image":"postgres:17-alpine"},
+            {"Id":"cache456","Name":"/cache","Config":{"Image":"redis:8-alpine"},
             "Mounts":[{"Name":"shared-data","Destination":"/var/lib/postgresql/data"}],
             "NetworkSettings":{"Ports":{"5432/tcp":[{"HostIp":"127.0.0.1","HostPort":"5432"}]}}}]
             """
@@ -595,8 +548,6 @@ suite.run("Runtime process and container mapping") {
     }
     let status = try StatusService(
         configurationStore: ConfigurationStore(paths: paths),
-        evidenceStore: EvidenceStore(paths: paths),
-        runtimeBindingStore: RuntimeBindingStore(paths: paths),
         processDetector: ProcessDetector(executor: processExecutor),
         dockerDetector: DockerDetector(
             executor: dockerExecutor,
@@ -607,148 +558,7 @@ suite.run("Runtime process and container mapping") {
         throw AssertionFailure(description: "mapped worktree is missing")
     }
     try suite.equal(worktree.processes.map(\.pid), [42], "cwd should map process")
-    try suite.equal(worktree.containers.map(\.name), ["database", "web"], "mounts and explicit DB bindings should map containers")
-    try suite.equal(worktree.databaseLabel, "reported_test", "active binding should override the display label")
-    try suite.equal(worktree.manualDatabaseLabel, "manual_fallback", "automatic binding must not mutate the manual fallback")
-    try suite.equal(worktree.databaseBinding?.label, "reported_test", "automatic binding source should remain visible")
-    try suite.equal(worktree.databaseBinding?.containerName, "database", "DB binding should retain its non-secret container relationship")
-}
-
-suite.run("Evidence current statuses and immutable STALE view") {
-    let path = "/tmp/project"
-    let now = Date()
-    let records = [
-        makeEvidence(status: .pass, path: path, sha: "current", endedAt: now),
-        makeEvidence(status: .fail, path: path, sha: "current", endedAt: now.addingTimeInterval(-1)),
-        makeEvidence(kind: .manual, status: .blocked, path: path, sha: "current", endedAt: now.addingTimeInterval(-2)),
-        makeEvidence(kind: .manual, status: .pending, path: path, sha: "current", endedAt: now.addingTimeInterval(-3)),
-        makeEvidence(status: .pass, path: path, sha: "older", endedAt: now.addingTimeInterval(-4))
-    ]
-    let overview = EvidenceEvaluator.overview(records: records, worktreePath: path, currentSHA: "current")
-    try suite.equal(overview.latestCurrent?.displayStatus, .pass, "latest current evidence should be PASS")
-    try suite.equal(
-        overview.currentCounts,
-        EvidenceCounts(pass: 1, fail: 1, blocked: 1, pending: 1),
-        "current counts should preserve all statuses"
-    )
-    try suite.equal(overview.history.last?.displayStatus, .stale, "old SHA should display STALE")
-    try suite.equal(records.last?.status, .pass, "original status must remain immutable")
-    try suite.equal(records.last?.sha, "older", "original SHA must remain immutable")
-}
-
-suite.run("verify stdout stderr exit code and manual evidence") {
-    let temporary = try TemporaryDirectory()
-    let repository = try makeGitRepository(in: temporary.url)
-    let paths = RuntimeAtlasPaths(baseDirectory: temporary.url.appendingPathComponent("data"))
-    try ConfigurationStore(paths: paths).addRepository(path: repository.path)
-    let evidenceStore = EvidenceStore(paths: paths)
-
-    let outputPipe = Pipe()
-    let errorPipe = Pipe()
-    let failed = try VerificationRunner(evidenceStore: evidenceStore).run(
-        command: ["/bin/sh", "-c", "printf atlas-standard-output; printf atlas-standard-error >&2; exit 7"],
-        currentDirectory: repository,
-        standardOutput: outputPipe.fileHandleForWriting,
-        standardError: errorPipe.fileHandleForWriting
-    )
-    try outputPipe.fileHandleForWriting.close()
-    try errorPipe.fileHandleForWriting.close()
-    let output = String(decoding: outputPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    let error = String(decoding: errorPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    try suite.equal(failed.exitCode, 7, "verify should preserve failure exit code")
-    try suite.equal(output, "atlas-standard-output", "stdout should pass through")
-    try suite.equal(error, "atlas-standard-error", "stderr should pass through")
-    try suite.equal(failed.record.status, .fail, "nonzero command should record FAIL")
-
-    let passed = try VerificationRunner(evidenceStore: evidenceStore).run(
-        command: ["/usr/bin/true"],
-        currentDirectory: repository,
-        standardOutput: FileHandle.nullDevice,
-        standardError: FileHandle.nullDevice
-    )
-    try suite.equal(passed.exitCode, 0, "verify should preserve success exit code")
-    try suite.equal(passed.record.status, .pass, "zero command should record PASS")
-
-    try ManualEvidenceRecorder(evidenceStore: evidenceStore).record(
-        kind: .manual,
-        status: .blocked,
-        note: "Native window unavailable",
-        viewport: "980x640",
-        currentDirectory: repository
-    )
-    try ManualEvidenceRecorder(evidenceStore: evidenceStore).record(
-        kind: .browser,
-        status: .pending,
-        note: "Waiting for observation",
-        viewport: "1280x800",
-        currentDirectory: repository
-    )
-
-    try Data("next\n".utf8).write(to: repository.appendingPathComponent("NEXT.md"))
-    try runGit(["-C", repository.path, "add", "NEXT.md"])
-    try runGit([
-        "-C", repository.path,
-        "-c", "user.name=Runtime Atlas Tests",
-        "-c", "user.email=runtime-atlas-tests@example.invalid",
-        "commit", "-m", "next"
-    ])
-    let emptyProcessExecutor = CommandExecutor { _, _, _ in
-        CommandResult(exitCode: 0, standardOutput: "", standardError: "")
-    }
-    let status = try StatusService(
-        configurationStore: ConfigurationStore(paths: paths),
-        evidenceStore: evidenceStore,
-        runtimeBindingStore: RuntimeBindingStore(paths: paths),
-        processDetector: ProcessDetector(executor: emptyProcessExecutor),
-        dockerDetector: DockerDetector(executable: nil)
-    ).makeStatus()
-    guard let overview = status.repositories.first?.worktrees.first?.evidence else {
-        throw AssertionFailure(description: "evidence overview is missing")
-    }
-    try suite.require(overview.history.allSatisfy { $0.displayStatus == .stale }, "SHA change should make all old evidence STALE")
-    let originals = try evidenceStore.load().value.records.map(\.status.rawValue).sorted()
-    try suite.equal(originals, ["BLOCKED", "FAIL", "PASS", "PENDING"], "persisted evidence statuses must not change")
-}
-
-suite.run("Configured verification command records exact SHA and exit result") {
-    let temporary = try TemporaryDirectory(prefix: "runtime-atlas-command-evidence")
-    let repository = try makeGitRepository(in: temporary.url)
-    let paths = RuntimeAtlasPaths(baseDirectory: temporary.url.appendingPathComponent("data"))
-    let store = EvidenceStore(paths: paths)
-    let recorder = CommandEvidenceRecorder(evidenceStore: store)
-    let startedAt = Date().addingTimeInterval(-1)
-
-    let context = try recorder.prepare(
-        command: ["swift", "test"],
-        startedAt: startedAt,
-        currentDirectory: repository
-    )
-    try Data("changed during command\n".utf8).write(to: repository.appendingPathComponent("GENERATED.md"))
-    try runGit(["-C", repository.path, "add", "GENERATED.md"])
-    try runGit([
-        "-C", repository.path,
-        "-c", "user.name=Runtime Atlas Tests",
-        "-c", "user.email=runtime-atlas-tests@example.invalid",
-        "commit", "-m", "changed-during-command"
-    ])
-    let passed = try recorder.record(context: context, exitCode: 0)
-    try suite.equal(passed.status, .pass, "exit 0 should record PASS")
-    try suite.equal(passed.branch, "main", "the current branch should be recorded")
-    try suite.equal(passed.sha.count, 40, "the full current SHA should be recorded")
-    let currentSHA = try runGit(["-C", repository.path, "rev-parse", "HEAD"]).standardOutput
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-    try suite.require(passed.sha != currentSHA, "the record must keep the SHA captured before the command changed it")
-    try suite.equal(passed.command, ["swift", "test"], "the resolved command should be recorded")
-
-    let failed = try recorder.record(
-        command: ["swift", "lint"],
-        exitCode: 2,
-        startedAt: startedAt,
-        currentDirectory: repository
-    )
-    try suite.equal(failed.status, .fail, "a nonzero exit should record FAIL")
-    try suite.equal(failed.exitCode, 2, "the original exit code should be preserved")
-    try suite.equal(try store.load().value.records.count, 2, "both configured verification results should persist")
+    try suite.equal(worktree.containers.map(\.name), ["web"], "worktree mounts should map containers")
 }
 
 suite.run("Korean English localization and language setting compatibility") {
@@ -761,14 +571,11 @@ suite.run("Korean English localization and language setting compatibility") {
     try suite.equal(english.addRepository, "Add Repository", "English copy should be available")
     try suite.equal(korean.addRepository, "저장소 추가", "Korean copy should be available")
     try suite.equal(korean.dockerUnavailable, "Docker 사용 불가", "runtime states should be localized")
-    try suite.equal(korean.evidenceKind(.manual), "수동", "evidence kinds should be localized")
     try suite.equal(korean.runtimeMap, "실행 상태", "runtime section should use a plain Korean primary label")
     try suite.equal(english.runtimeMap, "Runtime Status", "runtime section should use a plain English primary label")
     try suite.require(korean.detachedHead.contains("detached HEAD"), "plain copy should preserve the exact Git term")
     try suite.require(english.fullSHA.contains("SHA"), "plain copy should preserve the exact code identifier term")
     try suite.require(korean.processLocation(pid: 42, cwd: "/tmp/example").contains("cwd"), "process location should preserve cwd as a secondary term")
-    try suite.equal(korean.evidenceDisplayStatusLabel(.stale), "이전 코드 · STALE", "STALE should have a plain localized label")
-    try suite.equal(english.evidenceDisplayStatusLabel(.pass), "Passed · PASS", "PASS should have a plain English label")
     try suite.equal(english.checkForUpdates, "Check for Updates", "English update controls should be available")
     try suite.equal(korean.checkForUpdates, "업데이트 확인", "Korean update controls should be available")
     try suite.equal(korean.actions, "명령어", "the repository entry should use command wording")
@@ -788,7 +595,7 @@ suite.run("Korean English localization and language setting compatibility") {
         try suite.equal(english.localizedCoreMessage(message), message, "English core messages should remain stable")
     }
 
-    let legacyJSON = Data(#"{"schemaVersion":1,"repositories":[],"databaseLabels":{}}"#.utf8)
+    let legacyJSON = Data(#"{"schemaVersion":1,"repositories":[]}"#.utf8)
     let legacyConfiguration = try JSONDecoder().decode(RuntimeAtlasConfiguration.self, from: legacyJSON)
     try suite.equal(legacyConfiguration.appLanguage, nil, "configuration written before language support should still decode")
 
@@ -796,84 +603,27 @@ suite.run("Korean English localization and language setting compatibility") {
     let paths = RuntimeAtlasPaths(baseDirectory: temporary.url)
     let store = ConfigurationStore(paths: paths)
     let repositoryID = try store.addRepository(path: "/tmp/language-fixture")
-    try store.setDatabaseLabel("local_test", forWorktree: "/tmp/language-fixture")
     try store.setAppLanguage(.korean)
     var configuration = try store.load().value
     try suite.equal(configuration.appLanguage, .korean, "Korean choice should persist")
     try suite.equal(configuration.repositories.first?.id, repositoryID, "language save should preserve repositories")
-    try suite.equal(configuration.databaseLabels["/tmp/language-fixture"], "local_test", "language save should preserve DB labels")
 
     try store.setAppLanguage(.english)
     configuration = try store.load().value
     try suite.equal(configuration.appLanguage, .english, "English choice should replace Korean")
 }
 
-suite.run("Atomic concurrent storage corruption recovery and privacy") {
+suite.run("Atomic storage corruption recovery and privacy") {
     let temporary = try TemporaryDirectory()
     let paths = RuntimeAtlasPaths(baseDirectory: temporary.url)
 
-    try suite.equal(try DatabaseLabelValidator.normalized(" refactoring_test "), "refactoring_test", "logical label should normalize")
-    do {
-        _ = try DatabaseLabelValidator.normalized("postgresql://example.invalid/database")
-        throw AssertionFailure(description: "connection string was accepted as a DB label")
-    } catch DatabaseLabelError.invalid {
-        // Expected.
-    }
+    let sanitizedText = PrivacySanitizer.text("Checked https://example.invalid/path token=sensitive-sentinel")
+    try suite.require(!sanitizedText.contains("example.invalid"), "output URL should redact")
+    try suite.require(!sanitizedText.contains("sensitive-sentinel"), "output credential should redact")
+    let headerText = PrivacySanitizer.text("Authorization: Bearer sensitive-sentinel")
+    try suite.require(!headerText.contains("sensitive-sentinel"), "authorization header output should redact")
 
-    let sanitizedCommand = PrivacySanitizer.command([
-        "tool", "--api-key", "sensitive-sentinel",
-        "PASSWORD=sensitive-sentinel",
-        "postgresql://example.invalid/database"
-    ])
-    try suite.equal(
-        sanitizedCommand,
-        ["tool", "--api-key", "<redacted>", "PASSWORD=<redacted>", "<redacted-url>"],
-        "credential-shaped command arguments should redact"
-    )
-    try suite.equal(
-        PrivacySanitizer.command([
-            "/bin/sh", "-c", "curl https://example.invalid -H 'Authorization: Bearer sensitive-sentinel'"
-        ]),
-        ["/bin/sh", "-c", "<redacted-shell-script>"],
-        "shell command bodies should never be persisted"
-    )
-    try suite.equal(
-        PrivacySanitizer.command([
-            "curl", "-H", "Authorization: Bearer sensitive-sentinel",
-            "--user=example:sensitive-sentinel", "--url=https://example.invalid/private"
-        ]),
-        ["curl", "-H", "<redacted>", "--user=<redacted>", "--url=<redacted-url>"],
-        "header, user, and embedded URL arguments should redact"
-    )
-    let sanitizedNote = PrivacySanitizer.note("Checked https://example.invalid/path token=sensitive-sentinel")
-    try suite.require(!sanitizedNote.contains("example.invalid"), "note URL should redact")
-    try suite.require(!sanitizedNote.contains("sensitive-sentinel"), "note credential should redact")
-    let headerNote = PrivacySanitizer.note("Authorization: Bearer sensitive-sentinel")
-    try suite.require(!headerNote.contains("sensitive-sentinel"), "authorization header notes should redact")
-
-    let failures = FailureCollector()
-    DispatchQueue.concurrentPerform(iterations: 60) { index in
-        do {
-            try EvidenceStore(paths: paths).append(
-                makeEvidence(
-                    status: index.isMultiple(of: 2) ? .pass : .fail,
-                    path: "/tmp/project",
-                    sha: "sha",
-                    endedAt: Date(timeIntervalSince1970: TimeInterval(index))
-                )
-            )
-        } catch {
-            failures.append(error)
-        }
-    }
-    try suite.equal(failures.values, [], "concurrent appends should not fail")
-    let document = try EvidenceStore(paths: paths).load().value
-    try suite.equal(document.records.count, 60, "concurrent appends should not lose data")
-    try suite.equal(Set(document.records.map(\.id)).count, 60, "records should stay unique")
-    _ = try JSONSerialization.jsonObject(with: Data(contentsOf: paths.evidenceFile))
-
-    let mode = try FileManager.default.attributesOfItem(atPath: paths.evidenceFile.path)[.posixPermissions] as? NSNumber
-    try suite.equal(mode?.intValue, 0o600, "evidence file should be user-only")
+    _ = try ConfigurationStore(paths: paths).load()
     let directoryMode = try FileManager.default.attributesOfItem(atPath: paths.directory.path)[.posixPermissions] as? NSNumber
     try suite.equal(directoryMode?.intValue, 0o700, "local data directory should be user-only")
 
@@ -888,73 +638,9 @@ suite.run("Atomic concurrent storage corruption recovery and privacy") {
     try suite.equal(preserved.count, 1, "damaged source should be preserved")
     _ = try JSONSerialization.jsonObject(with: Data(contentsOf: paths.configurationFile))
 
-    try ConfigurationStore(paths: paths).setDatabaseLabel("refactoring_test", forWorktree: "/tmp/project/nested")
     try ConfigurationStore(paths: paths).removeRepository(id: recoveredRepositoryID)
     let afterRemoval = try ConfigurationStore(paths: paths).load().value
-    try suite.require(afterRemoval.databaseLabels.isEmpty, "repository removal should clear labels under its root")
-}
-
-suite.run("Runtime DB binding ownership, liveness, and atomic storage") {
-    let temporary = try TemporaryDirectory(prefix: "runtime-atlas-bindings")
-    let paths = RuntimeAtlasPaths(baseDirectory: temporary.url)
-    let store = RuntimeBindingStore(paths: paths)
-    let worktree = "/tmp/runtime-atlas-binding-worktree"
-
-    let older = try store.linkDatabase(
-        label: "older_active",
-        worktreePath: worktree,
-        ownerPID: 101,
-        registeredAt: Date(timeIntervalSince1970: 1)
-    )
-    _ = try store.linkDatabase(
-        label: "newer_stopped",
-        worktreePath: worktree,
-        ownerPID: 202,
-        registeredAt: Date(timeIntervalSince1970: 2)
-    )
-    let loaded = try store.load().value.records
-    let active = RuntimeBindingEvaluator.activeDatabaseBinding(
-        records: loaded,
-        worktreePath: worktree,
-        processIsRunning: { $0 == 101 }
-    )
-    try suite.equal(active?.id, older.id, "a stopped newer owner must not hide the active session")
-
-    try store.unlinkDatabase(worktreePath: worktree, ownerPID: 101)
-    try suite.equal(try store.load().value.records.map(\.ownerPID), [202], "owner-scoped unlink should preserve parallel sessions")
-    try store.unlinkDatabase(worktreePath: worktree)
-    let afterFullUnlink = try store.load().value.records
-    try suite.require(afterFullUnlink.isEmpty, "path-scoped unlink should remove all sessions")
-
-    do {
-        _ = try store.linkDatabase(label: "postgresql://example.invalid/private", worktreePath: worktree)
-        throw AssertionFailure(description: "a DB URL was accepted as a runtime binding label")
-    } catch DatabaseLabelError.invalid {
-        // Expected.
-    }
-
-    do {
-        _ = try store.linkDatabase(label: "safe_label", worktreePath: worktree, containerName: "https://example.invalid/private")
-        throw AssertionFailure(description: "a URL was accepted as a container name")
-    } catch RuntimeBindingError.invalidContainerName {
-        // Expected.
-    }
-
-    let failures = FailureCollector()
-    DispatchQueue.concurrentPerform(iterations: 20) { index in
-        do {
-            _ = try RuntimeBindingStore(paths: paths).linkDatabase(
-                label: "parallel_\(index)",
-                worktreePath: worktree,
-                ownerPID: Int32(index + 1)
-            )
-        } catch {
-            failures.append(error)
-        }
-    }
-    try suite.equal(failures.values, [], "concurrent runtime binding writes should not fail")
-    try suite.equal(try store.load().value.records.count, 20, "concurrent runtime binding writes should not lose sessions")
-    _ = try JSONSerialization.jsonObject(with: Data(contentsOf: paths.runtimeBindingsFile))
+    try suite.require(afterRemoval.repositories.isEmpty, "repository removal should clear the registration")
 }
 
 suite.run("Update version, commit, asset, and app bundle policy") {
@@ -1119,13 +805,12 @@ suite.run("Custom action validation, safe expansion, and worktree input") {
         }
     }
 
-    let verification = CustomActionDefinition(
+    let runOnce = CustomActionDefinition(
         repositoryID: repositoryID,
         name: "Test",
-        commandTemplate: "swift test",
-        recordsVerificationEvidence: true
+        commandTemplate: "swift test"
     )
-    try CustomActionPlanner.validate(verification)
+    try CustomActionPlanner.validate(runOnce)
 
     let server = CustomActionDefinition(
         repositoryID: repositoryID,
@@ -1157,11 +842,11 @@ suite.run("Custom action validation, safe expansion, and worktree input") {
     )
     try suite.require(
         !CustomActionRuntimeEvaluator.isExternallyRunning(
-            verification,
+            runOnce,
             mappedProcesses: [listener],
             isManagedByRuntimeAtlas: false
         ),
-        "a run-once verification command must not inherit listener state"
+        "a run-once command must not inherit listener state"
     )
 
     for invalid in [
@@ -1170,25 +855,11 @@ suite.run("Custom action validation, safe expansion, and worktree input") {
             name: "Incorrect listener detection",
             commandTemplate: "swift test",
             detectsRunningWorktreeListener: true
-        ),
-        CustomActionDefinition(
-            repositoryID: repositoryID,
-            name: "Server is not verification",
-            commandTemplate: "npm run dev",
-            kind: .session,
-            recordsVerificationEvidence: true
-        ),
-        CustomActionDefinition(
-            repositoryID: repositoryID,
-            name: "Delete is not verification",
-            commandTemplate: "rm fixture",
-            risk: .destructive,
-            recordsVerificationEvidence: true
         )
     ] {
         do {
             try CustomActionPlanner.validate(invalid)
-            throw AssertionFailure(description: "an invalid runtime or verification contract was accepted")
+            throw AssertionFailure(description: "an invalid runtime contract was accepted")
         } catch is CustomActionError {
             // Expected.
         }
@@ -1199,7 +870,7 @@ suite.run("Custom action configuration is backward compatible and atomic") {
     let temporary = try TemporaryDirectory(prefix: "runtime-atlas-actions")
     let paths = RuntimeAtlasPaths(baseDirectory: temporary.url)
     let legacy = """
-    {"schemaVersion":1,"repositories":[],"databaseLabels":{},"appLanguage":"ko"}
+    {"schemaVersion":1,"repositories":[],"appLanguage":"ko"}
     """
     try legacy.write(to: paths.configurationFile, atomically: true, encoding: .utf8)
     let store = ConfigurationStore(paths: paths, repositoryRootResolver: { $0 })
@@ -1240,10 +911,6 @@ suite.run("Custom action configuration is backward compatible and atomic") {
     try suite.require(
         legacyAction.detectsRunningWorktreeListener,
         "legacy keep-running commands should gain safe worktree listener detection"
-    )
-    try suite.require(
-        !legacyAction.recordsVerificationEvidence,
-        "legacy commands must not become verification commands implicitly"
     )
     try suite.equal(
         WorktreeOrderIdentity.key(branch: "feature/one", detached: false, sha: "abc"),
