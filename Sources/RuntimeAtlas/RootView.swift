@@ -13,20 +13,19 @@ struct RootView: View {
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(spacing: 0) {
-            if updates.isUpdateAvailable {
-                UpdateAvailableBanner()
-                    .environmentObject(updates)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 10)
-                    .padding(.bottom, 4)
-            }
+        HSplitView {
+            SidebarView(repositoryToRemove: $repositoryToRemove)
+                .environmentObject(model)
+                .frame(minWidth: 200, idealWidth: 260, maxWidth: 360)
 
-            HSplitView {
-                SidebarView(repositoryToRemove: $repositoryToRemove)
-                    .environmentObject(model)
-                    .frame(minWidth: 200, idealWidth: 260, maxWidth: 360)
-
+            VStack(spacing: 0) {
+                if updates.isUpdateAvailable {
+                    UpdateAvailableBanner()
+                        .environmentObject(updates)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 10)
+                        .padding(.bottom, 4)
+                }
                 DetailPane()
                     .environmentObject(model)
                     .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
@@ -34,28 +33,6 @@ struct RootView: View {
         }
         .foregroundStyle(RuntimeAtlasTheme.primaryText)
         .background(RuntimeAtlasTheme.background)
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    model.chooseRepository()
-                } label: {
-                    Label(copy.addRepository, systemImage: "folder.badge.plus")
-                }
-                .accessibilityLabel(copy.addRepository)
-
-                Button {
-                    model.refresh()
-                } label: {
-                    if model.isRefreshing {
-                        Label(copy.refreshing, systemImage: "arrow.clockwise")
-                    } else {
-                        Label(copy.refresh, systemImage: "arrow.clockwise")
-                    }
-                }
-                .disabled(model.isRefreshing)
-                .accessibilityLabel(model.isRefreshing ? copy.refreshingAccessibility : copy.refreshAccessibility)
-            }
-        }
         .task {
             if model.status == nil {
                 model.refresh()
@@ -102,16 +79,38 @@ private struct SidebarView: View {
             HStack {
                 Text(copy.repositories)
                     .font(.system(size: RuntimeAtlasTheme.Typography.sectionTitle, weight: .semibold))
-                Spacer()
                 if let count = model.status?.repositories.count {
                     Text("\(count)")
                         .font(.system(size: RuntimeAtlasTheme.Typography.secondary, weight: .semibold, design: .rounded))
                         .foregroundStyle(RuntimeAtlasTheme.tertiaryText)
                         .accessibilityLabel(copy.registeredRepositories(count))
                 }
+                Spacer(minLength: 8)
+                Button {
+                    model.chooseRepository()
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
+                .accessibilityLabel(copy.addRepository)
+                .help(copy.addRepository)
+
+                Button {
+                    model.refresh()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
+                .disabled(model.isRefreshing)
+                .accessibilityLabel(model.isRefreshing ? copy.refreshingAccessibility : copy.refreshAccessibility)
+                .help(model.isRefreshing ? copy.refreshing : copy.refresh)
             }
             .padding(.horizontal, 14)
-            .padding(.top, 14)
+            .padding(.top, 12)
             .padding(.bottom, 10)
 
             Divider().overlay(RuntimeAtlasTheme.border)

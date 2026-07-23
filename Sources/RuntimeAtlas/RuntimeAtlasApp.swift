@@ -48,6 +48,7 @@ struct RuntimeAtlasApp: App {
                     appDelegate.stopActions = { actionRunner.stopAll() }
                 }
         }
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandMenu(model.copy.atlasMenu) {
