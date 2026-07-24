@@ -45,7 +45,9 @@ struct WorktreeCommandsSection: View {
 
     @ViewBuilder private func compactAction(_ action: CustomActionDefinition) -> some View {
         let state = runner.state(for: action, worktreePath: worktree.path)
+        let phase = state?.phase
         let managedRunning = runner.isRunning(action, worktreePath: worktree.path)
+        let stopping = phase == .stopping
         let externalRunning = CustomActionRuntimeEvaluator.isExternallyRunning(
             action,
             mappedProcesses: worktree.processes,
@@ -63,28 +65,39 @@ struct WorktreeCommandsSection: View {
                     }
                 } label: {
                     HStack(spacing: 7) {
-                        Image(systemName: managedRunning
-                            ? "stop.fill"
-                            : (externalRunning
-                                ? "dot.radiowaves.left.and.right"
-                                : (action.kind == .session ? "play.fill" : "terminal.fill")))
+                        if (phase == .running && action.kind == .task) || stopping {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(commandColor(phase, externalRunning: externalRunning) ?? RuntimeAtlasTheme.accent)
+                        } else {
+                            Image(systemName: commandIcon(
+                                action,
+                                phase: phase,
+                                externalRunning: externalRunning
+                            ))
+                        }
                         Text(action.name)
                             .lineLimit(1)
                         Spacer(minLength: 3)
-                        if managedRunning {
-                            Text(copy.running)
+                        if let status = commandStatus(phase, externalRunning: externalRunning) {
+                            Text(status)
                                 .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .semibold))
-                                .foregroundStyle(RuntimeAtlasTheme.amber)
-                        } else if externalRunning {
-                            Text(copy.runningOutsideApp)
-                                .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .semibold))
-                                .foregroundStyle(RuntimeAtlasTheme.mint)
+                                .foregroundStyle(
+                                    commandColor(phase, externalRunning: externalRunning)
+                                        ?? RuntimeAtlasTheme.secondaryText
+                                )
                         }
                     }
                 }
-                .buttonStyle(CompactCommandButtonStyle(running: managedRunning || externalRunning))
-                .disabled(worktree.availability != .available)
-                .accessibilityLabel(commandAccessibilityLabel(action, externalRunning: externalRunning))
+                .buttonStyle(CompactCommandButtonStyle(
+                    statusColor: commandColor(phase, externalRunning: externalRunning)
+                ))
+                .disabled(worktree.availability != .available || stopping)
+                .accessibilityLabel(commandAccessibilityLabel(
+                    action,
+                    phase: phase,
+                    externalRunning: externalRunning
+                ))
                 .help(externalRunning ? copy.externalRunningHelp : "")
 
                 if let state, !state.output.isEmpty {
@@ -102,23 +115,66 @@ struct WorktreeCommandsSection: View {
                     .accessibilityLabel("\(action.name), \(copy.output)")
                 }
             }
-
-            if let failure = failureText(state?.phase) {
-                Text(failure)
-                    .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .medium))
-                    .foregroundStyle(RuntimeAtlasTheme.red)
-                    .lineLimit(1)
-            }
         }
         .accessibilityElement(children: .contain)
+        .animation(.easeOut(duration: 0.16), value: phase)
     }
 
-    private func commandAccessibilityLabel(_ action: CustomActionDefinition, externalRunning: Bool) -> String {
-        if runner.isRunning(action, worktreePath: worktree.path) {
+    private func commandAccessibilityLabel(
+        _ action: CustomActionDefinition,
+        phase: ActionRunPhase?,
+        externalRunning: Bool
+    ) -> String {
+        if phase == .stopping {
+            return "\(action.name), \(copy.stopping)"
+        }
+        if phase == .running {
             return "\(action.name), \(copy.running), \(copy.stop)"
         }
         if externalRunning { return "\(action.name), \(copy.runningOutsideApp)" }
+        if let status = commandStatus(phase, externalRunning: false) {
+            return "\(action.name), \(status), \(action.kind == .session ? copy.start : copy.run)"
+        }
         return "\(action.name), \(action.kind == .session ? copy.start : copy.run)"
+    }
+
+    private func commandIcon(
+        _ action: CustomActionDefinition,
+        phase: ActionRunPhase?,
+        externalRunning: Bool
+    ) -> String {
+        if phase == .running { return "stop.fill" }
+        if externalRunning { return "dot.radiowaves.left.and.right" }
+        return switch phase {
+        case .succeeded: "checkmark.circle.fill"
+        case .stopped: "checkmark.circle"
+        case .failed: "exclamationmark.circle.fill"
+        default: action.kind == .session ? "play.fill" : "terminal.fill"
+        }
+    }
+
+    private func commandStatus(_ phase: ActionRunPhase?, externalRunning: Bool) -> String? {
+        if externalRunning { return copy.runningOutsideApp }
+        return switch phase {
+        case .running: copy.running
+        case .stopping: copy.stopping
+        case .succeeded: copy.succeeded
+        case .stopped: copy.stopped
+        case .failed(let code): copy.failedExit(code)
+        case nil: nil
+        }
+    }
+
+    private func commandColor(_ phase: ActionRunPhase?, externalRunning: Bool) -> Color? {
+        if externalRunning { return RuntimeAtlasTheme.mint }
+        return switch phase {
+        case .running: RuntimeAtlasTheme.accent
+        case .stopping: RuntimeAtlasTheme.amber
+        case .succeeded: RuntimeAtlasTheme.mint
+        case .stopped: RuntimeAtlasTheme.slate
+        case .failed: RuntimeAtlasTheme.red
+        case nil: nil
+        }
     }
 
     private func prepare(_ action: CustomActionDefinition) {
@@ -131,15 +187,10 @@ struct WorktreeCommandsSection: View {
             catch { model.operationMessage = copy.actionLaunchFailed }
         } else { actionToPrepare = action }
     }
-
-    private func failureText(_ phase: ActionRunPhase?) -> String? {
-        if case .failed(let code) = phase { return copy.failedExit(code) }
-        return nil
-    }
 }
 
 private struct CompactCommandButtonStyle: ButtonStyle {
-    let running: Bool
+    let statusColor: Color?
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -153,7 +204,7 @@ private struct CompactCommandButtonStyle: ButtonStyle {
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .stroke(running ? RuntimeAtlasTheme.amber.opacity(0.45) : RuntimeAtlasTheme.border)
+                    .stroke(statusColor?.opacity(0.52) ?? RuntimeAtlasTheme.border)
             }
     }
 }

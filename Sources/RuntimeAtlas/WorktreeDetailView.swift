@@ -97,8 +97,31 @@ struct WorktreeDetailView: View {
             .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(URL(fileURLWithPath: worktree.path).lastPathComponent)
-                    .font(.system(size: RuntimeAtlasTheme.Typography.screenTitle, weight: .semibold))
+                HStack(spacing: 10) {
+                    Text(URL(fileURLWithPath: worktree.path).lastPathComponent)
+                        .font(.system(size: RuntimeAtlasTheme.Typography.screenTitle, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    Button {
+                        model.refresh()
+                    } label: {
+                        Group {
+                            if model.isRefreshing {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                        }
+                        .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(AtlasButtonStyle())
+                    .fixedSize()
+                    .disabled(model.isRefreshing)
+                    .accessibilityLabel(model.isRefreshing ? copy.refreshingAccessibility : copy.refreshAccessibility)
+                    .help(model.isRefreshing ? copy.refreshing : copy.refresh)
+                }
                 Text(worktree.path)
                     .font(.system(size: RuntimeAtlasTheme.Typography.technical, design: .monospaced))
                     .foregroundStyle(RuntimeAtlasTheme.secondaryText)

@@ -214,18 +214,6 @@ private struct SidebarView: View {
                 .foregroundStyle(RuntimeAtlasTheme.secondaryText)
                 .accessibilityLabel(copy.addRepository)
                 .help(copy.addRepository)
-
-                Button {
-                    model.refresh()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .frame(width: 20, height: 20)
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
-                .disabled(model.isRefreshing)
-                .accessibilityLabel(model.isRefreshing ? copy.refreshingAccessibility : copy.refreshAccessibility)
-                .help(model.isRefreshing ? copy.refreshing : copy.refresh)
             }
             .padding(.horizontal, 14)
             .padding(.top, 12)
