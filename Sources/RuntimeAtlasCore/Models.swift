@@ -116,20 +116,74 @@ public enum WorktreeNavigationDirection: Sendable {
     case previous
 }
 
+public struct WorktreeNavigationSession: Equatable, Sendable {
+    public let paths: [String]
+    public let selectedIndex: Int
+
+    public init(paths: [String], selectedIndex: Int) {
+        self.paths = paths
+        self.selectedIndex = selectedIndex
+    }
+
+    public var selectedPath: String? {
+        paths.indices.contains(selectedIndex) ? paths[selectedIndex] : nil
+    }
+}
+
 public enum WorktreeNavigation {
-    public static func adjacentPath(
-        in paths: [String],
-        from selectedPath: String?,
+    private static let recentLimit = 20
+
+    public static func recording(_ path: String, in recentPaths: [String]) -> [String] {
+        Array(([path] + recentPaths.filter { $0 != path }).prefix(recentLimit))
+    }
+
+    public static func reconciling(
+        recentPaths: [String],
+        availablePaths: [String]
+    ) -> [String] {
+        let availablePaths = unique(availablePaths)
+        let available = Set(availablePaths)
+        let recentPaths = unique(recentPaths).filter(available.contains)
+        let recent = recentPaths + availablePaths.filter { !recentPaths.contains($0) }
+        return Array(recent.prefix(recentLimit))
+    }
+
+    public static func advancing(
+        availablePaths: [String],
+        currentPath: String?,
+        recentPaths: [String],
+        session: WorktreeNavigationSession?,
         direction: WorktreeNavigationDirection
-    ) -> String? {
-        guard !paths.isEmpty else { return nil }
-        guard let selectedPath,
-              let selectedIndex = paths.firstIndex(of: selectedPath) else {
-            return direction == .next ? paths.first : paths.last
+    ) -> WorktreeNavigationSession? {
+        let availablePaths = unique(availablePaths)
+        guard availablePaths.count > 1 else { return nil }
+        let available = Set(availablePaths)
+
+        let paths: [String]
+        let startingIndex: Int
+        if let session {
+            paths = session.paths.filter(available.contains)
+            guard paths.count > 1 else { return nil }
+            startingIndex = session.selectedPath.flatMap(paths.firstIndex(of:)) ?? 0
+        } else {
+            let reconciled = reconciling(recentPaths: recentPaths, availablePaths: availablePaths)
+            if let currentPath, reconciled.contains(currentPath) {
+                paths = recording(currentPath, in: reconciled)
+                startingIndex = 0
+            } else {
+                paths = reconciled
+                startingIndex = direction == .next ? paths.count - 1 : 0
+            }
         }
 
-        let offset = direction == .next ? 1 : paths.count - 1
-        return paths[(selectedIndex + offset) % paths.count]
+        let offset = direction == .next ? 1 : -1
+        let selectedIndex = (startingIndex + offset + paths.count) % paths.count
+        return WorktreeNavigationSession(paths: paths, selectedIndex: selectedIndex)
+    }
+
+    private static func unique(_ paths: [String]) -> [String] {
+        var seen = Set<String>()
+        return paths.filter { seen.insert($0).inserted }
     }
 }
 

@@ -8,7 +8,8 @@ final class AtlasAppModel: ObservableObject {
     @Published private(set) var isRefreshing = false
     @Published private(set) var language: AppLanguage
     @Published private(set) var customActions: [CustomActionDefinition]
-    @Published var selectedWorktreePath: String?
+    @Published private(set) var selectedWorktreePath: String?
+    @Published private(set) var worktreeNavigationSession: WorktreeNavigationSession?
     @Published var operationMessage: String?
     @Published private(set) var languageSaveError: String?
 
@@ -16,6 +17,7 @@ final class AtlasAppModel: ObservableObject {
     private let statusService: StatusService
     private let processTerminator: ProcessTerminator
     private var refreshTask: Task<Void, Never>?
+    private var recentWorktreePaths: [String] = []
     var statusDidChange: ((AtlasStatus) -> Void)?
 
     init(
@@ -47,6 +49,13 @@ final class AtlasAppModel: ObservableObject {
 
     var canCycleWorktrees: Bool {
         worktreePaths.count > 1
+    }
+
+    var worktreeSwitcherItems: [WorktreeStatus] {
+        guard let session = worktreeNavigationSession else { return [] }
+        let worktrees = status?.repositories.flatMap(\.worktrees) ?? []
+        let worktreeByPath = Dictionary(uniqueKeysWithValues: worktrees.map { ($0.path, $0) })
+        return session.paths.compactMap { worktreeByPath[$0] }
     }
 
     func actions(for repositoryID: UUID) -> [CustomActionDefinition] {
@@ -110,6 +119,7 @@ final class AtlasAppModel: ObservableObject {
         do {
             try configurationStore.removeRepository(id: repository.id)
             if repository.worktrees.contains(where: { $0.path == selectedWorktreePath }) {
+                cancelWorktreeSwitcher()
                 selectedWorktreePath = nil
             }
             refresh()
@@ -161,15 +171,40 @@ final class AtlasAppModel: ObservableObject {
     }
 
     func select(worktree: WorktreeStatus) {
-        selectedWorktreePath = worktree.path
+        cancelWorktreeSwitcher()
+        selectWorktree(path: worktree.path)
     }
 
-    func selectAdjacentWorktree(direction: WorktreeNavigationDirection) {
-        selectedWorktreePath = WorktreeNavigation.adjacentPath(
-            in: worktreePaths,
-            from: selectedWorktreePath,
+    func advanceWorktreeSwitcher(direction: WorktreeNavigationDirection) {
+        recentWorktreePaths = WorktreeNavigation.reconciling(
+            recentPaths: recentWorktreePaths,
+            availablePaths: worktreePaths
+        )
+        worktreeNavigationSession = WorktreeNavigation.advancing(
+            availablePaths: worktreePaths,
+            currentPath: selectedWorktreePath,
+            recentPaths: recentWorktreePaths,
+            session: worktreeNavigationSession,
             direction: direction
         )
+    }
+
+    func commitWorktreeSwitcher() {
+        guard let path = worktreeNavigationSession?.selectedPath else {
+            worktreeNavigationSession = nil
+            return
+        }
+        worktreeNavigationSession = nil
+        selectWorktree(path: path)
+    }
+
+    func cancelWorktreeSwitcher() {
+        worktreeNavigationSession = nil
+    }
+
+    func selectRecentWorktree(direction: WorktreeNavigationDirection) {
+        advanceWorktreeSwitcher(direction: direction)
+        commitWorktreeSwitcher()
     }
 
     func stopListeningProcess(_ process: RuntimeProcess, in worktree: WorktreeStatus) {
@@ -216,10 +251,28 @@ final class AtlasAppModel: ObservableObject {
 
     private func reconcileSelection(in status: AtlasStatus) {
         let paths = status.repositories.flatMap(\.worktrees).map(\.path)
+        cancelWorktreeSwitcher()
+        recentWorktreePaths = WorktreeNavigation.reconciling(
+            recentPaths: recentWorktreePaths,
+            availablePaths: paths
+        )
         if let selectedWorktreePath, paths.contains(selectedWorktreePath) {
+            recentWorktreePaths = WorktreeNavigation.recording(
+                selectedWorktreePath,
+                in: recentWorktreePaths
+            )
             return
         }
-        selectedWorktreePath = paths.first
+        guard let firstPath = paths.first else {
+            selectedWorktreePath = nil
+            return
+        }
+        selectWorktree(path: firstPath)
+    }
+
+    private func selectWorktree(path: String) {
+        selectedWorktreePath = path
+        recentWorktreePaths = WorktreeNavigation.recording(path, in: recentWorktreePaths)
     }
 
     private var worktreePaths: [String] {

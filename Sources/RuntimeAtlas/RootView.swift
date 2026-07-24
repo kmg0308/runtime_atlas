@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import RuntimeAtlasCore
 import SwiftUI
@@ -9,6 +10,7 @@ struct RootView: View {
     @EnvironmentObject private var actionRunner: ActionRunner
     @Environment(\.atlasCopy) private var copy
     @State private var repositoryToRemove: RepositoryStatus?
+    @StateObject private var worktreeKeyboardMonitor = WorktreeKeyboardMonitor()
 
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -33,11 +35,29 @@ struct RootView: View {
         }
         .foregroundStyle(RuntimeAtlasTheme.primaryText)
         .background(RuntimeAtlasTheme.background)
+        .overlay {
+            if let session = model.worktreeNavigationSession {
+                WorktreeSwitcherOverlay(
+                    worktrees: model.worktreeSwitcherItems,
+                    selectedPath: session.selectedPath
+                )
+            }
+        }
         .task {
             if model.status == nil {
                 model.refresh()
             }
             updates.startAutoChecks()
+        }
+        .onAppear {
+            worktreeKeyboardMonitor.start(model: model)
+        }
+        .onDisappear {
+            worktreeKeyboardMonitor.stop()
+            model.cancelWorktreeSwitcher()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            model.cancelWorktreeSwitcher()
         }
         .onReceive(refreshTimer) { _ in
             model.refresh()
@@ -66,6 +86,104 @@ struct RootView: View {
                 .environmentObject(updates)
                 .environment(\.atlasCopy, copy)
         }
+    }
+}
+
+@MainActor
+private final class WorktreeKeyboardMonitor: ObservableObject {
+    private var monitor: Any?
+
+    func start(model: AtlasAppModel) {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) {
+            [weak model] event in
+            guard let model else { return event }
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+            if event.type == .flagsChanged {
+                if model.worktreeNavigationSession != nil, !modifiers.contains(.control) {
+                    model.commitWorktreeSwitcher()
+                }
+                return event
+            }
+
+            guard event.keyCode == 48, modifiers.contains(.control) else { return event }
+            if event.type == .keyDown {
+                model.advanceWorktreeSwitcher(
+                    direction: modifiers.contains(.shift) ? .previous : .next
+                )
+            }
+            return nil
+        }
+    }
+
+    func stop() {
+        guard let monitor else { return }
+        NSEvent.removeMonitor(monitor)
+        self.monitor = nil
+    }
+}
+
+private struct WorktreeSwitcherOverlay: View {
+    @Environment(\.atlasCopy) private var copy
+    let worktrees: [WorktreeStatus]
+    let selectedPath: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(copy.recentlyViewedWorktrees)
+                .font(.system(size: RuntimeAtlasTheme.Typography.caption, weight: .semibold))
+                .foregroundStyle(RuntimeAtlasTheme.secondaryText)
+                .padding(.horizontal, 4)
+
+            ScrollView {
+                LazyVStack(spacing: 3) {
+                    ForEach(worktrees) { worktree in
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.triangle.branch")
+                                .foregroundStyle(RuntimeAtlasTheme.accent)
+                                .frame(width: 16)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(URL(fileURLWithPath: worktree.path).lastPathComponent)
+                                    .font(.system(size: RuntimeAtlasTheme.Typography.body, weight: .medium))
+                                    .lineLimit(1)
+                                Text(worktree.detached ? copy.detachedHead : (worktree.branch ?? copy.unknownBranch))
+                                    .font(.system(size: RuntimeAtlasTheme.Typography.caption))
+                                    .foregroundStyle(RuntimeAtlasTheme.secondaryText)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 4)
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 7)
+                        .background {
+                            RoundedRectangle(cornerRadius: RuntimeAtlasTheme.controlRadius, style: .continuous)
+                                .fill(
+                                    worktree.path == selectedPath
+                                        ? RuntimeAtlasTheme.selected
+                                        : Color.clear
+                                )
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: 360)
+        }
+        .padding(10)
+        .frame(width: 340)
+        .background {
+            RoundedRectangle(cornerRadius: RuntimeAtlasTheme.cardRadius, style: .continuous)
+                .fill(RuntimeAtlasTheme.elevatedSurface)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: RuntimeAtlasTheme.cardRadius, style: .continuous)
+                .stroke(RuntimeAtlasTheme.strongBorder)
+        }
+        .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(copy.recentlyViewedWorktrees)
     }
 }
 

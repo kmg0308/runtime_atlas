@@ -64,14 +64,14 @@ struct RuntimeAtlasApp: App {
 
                 Divider()
 
-                Button(model.copy.previousWorktree) {
-                    model.selectAdjacentWorktree(direction: .previous)
+                Button(model.copy.previousRecentWorktree) {
+                    model.selectRecentWorktree(direction: .previous)
                 }
                 .keyboardShortcut(KeyEquivalent("\t"), modifiers: [.control, .shift])
                 .disabled(!model.canCycleWorktrees)
 
-                Button(model.copy.nextWorktree) {
-                    model.selectAdjacentWorktree(direction: .next)
+                Button(model.copy.nextRecentWorktree) {
+                    model.selectRecentWorktree(direction: .next)
                 }
                 .keyboardShortcut(KeyEquivalent("\t"), modifiers: [.control])
                 .disabled(!model.canCycleWorktrees)

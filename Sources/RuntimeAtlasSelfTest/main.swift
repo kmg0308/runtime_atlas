@@ -578,8 +578,16 @@ suite.run("Korean English localization and language setting compatibility") {
     try suite.require(korean.processLocation(pid: 42, cwd: "/tmp/example").contains("cwd"), "process location should preserve cwd as a secondary term")
     try suite.equal(english.checkForUpdates, "Check for Updates", "English update controls should be available")
     try suite.equal(korean.checkForUpdates, "업데이트 확인", "Korean update controls should be available")
-    try suite.equal(english.nextWorktree, "Next Worktree", "English worktree navigation should be available")
-    try suite.equal(korean.previousWorktree, "이전 워크트리", "Korean worktree navigation should be available")
+    try suite.equal(
+        english.nextRecentWorktree,
+        "Next Recently Viewed Worktree",
+        "English recent worktree navigation should be available"
+    )
+    try suite.equal(
+        korean.previousRecentWorktree,
+        "이전 최근 본 워크트리",
+        "Korean recent worktree navigation should be available"
+    )
     try suite.equal(korean.actions, "명령어", "the repository entry should use command wording")
     try suite.equal(english.actions, "Commands", "English should use command wording")
     try suite.require(korean.actionsSubtitle.contains("모든 작업 폴더"), "repository settings should explain shared definitions")
@@ -941,32 +949,82 @@ suite.run("Custom action configuration is backward compatible and atomic") {
     try suite.equal(removed.worktreeOrderByRepository, [:], "removing a repository should remove its saved worktree order")
 }
 
-suite.run("Worktree keyboard navigation follows displayed order and wraps") {
-    let paths = ["/tmp/main", "/tmp/feature", "/tmp/review"]
-    try suite.equal(
-        WorktreeNavigation.adjacentPath(in: paths, from: "/tmp/main", direction: .next),
-        "/tmp/feature",
-        "next navigation should follow worktree order"
+suite.run("Worktree keyboard navigation follows recent use like the macOS app switcher") {
+    let paths = ["A", "B", "C", "D"]
+    let recent = ["B", "C", "A", "D"]
+    let firstSession = WorktreeNavigation.advancing(
+        availablePaths: paths,
+        currentPath: "B",
+        recentPaths: recent,
+        session: nil,
+        direction: .next
     )
     try suite.equal(
-        WorktreeNavigation.adjacentPath(in: paths, from: "/tmp/review", direction: .next),
-        "/tmp/main",
-        "next navigation should wrap to the first worktree"
+        firstSession?.selectedPath,
+        "C",
+        "a quick Control-Tab should select the previously viewed worktree"
+    )
+
+    let recentAfterCommit = WorktreeNavigation.recording("C", in: recent)
+    let secondSession = WorktreeNavigation.advancing(
+        availablePaths: paths,
+        currentPath: "C",
+        recentPaths: recentAfterCommit,
+        session: nil,
+        direction: .next
     )
     try suite.equal(
-        WorktreeNavigation.adjacentPath(in: paths, from: "/tmp/main", direction: .previous),
-        "/tmp/review",
-        "previous navigation should wrap to the last worktree"
+        secondSession?.selectedPath,
+        "B",
+        "the next quick Control-Tab should toggle back"
+    )
+
+    let heldSession = WorktreeNavigation.advancing(
+        availablePaths: paths,
+        currentPath: "B",
+        recentPaths: recent,
+        session: firstSession,
+        direction: .next
     )
     try suite.equal(
-        WorktreeNavigation.adjacentPath(in: paths, from: nil, direction: .previous),
-        "/tmp/review",
-        "previous navigation without a selection should choose the last worktree"
+        heldSession?.selectedPath,
+        "A",
+        "repeating Tab while Control is held should advance through the session snapshot"
+    )
+
+    let previousSession = WorktreeNavigation.advancing(
+        availablePaths: paths,
+        currentPath: "B",
+        recentPaths: recent,
+        session: nil,
+        direction: .previous
     )
     try suite.equal(
-        WorktreeNavigation.adjacentPath(in: [], from: nil, direction: .next),
+        previousSession?.selectedPath,
+        "D",
+        "Control-Shift-Tab should move backward through recent worktrees"
+    )
+
+    let reconciled = WorktreeNavigation.reconciling(
+        recentPaths: ["B", "missing", "B", "C"],
+        availablePaths: paths
+    )
+    try suite.equal(
+        reconciled,
+        ["B", "C", "A", "D"],
+        "refresh should remove missing paths and append new worktrees in display order"
+    )
+
+    try suite.equal(
+        WorktreeNavigation.advancing(
+            availablePaths: ["A"],
+            currentPath: "A",
+            recentPaths: ["A"],
+            session: nil,
+            direction: .next
+        ),
         nil,
-        "navigation without worktrees should remain empty"
+        "navigation with fewer than two worktrees should remain inactive"
     )
 }
 
