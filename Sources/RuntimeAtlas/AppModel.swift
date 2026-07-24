@@ -45,6 +45,10 @@ final class AtlasAppModel: ObservableObject {
         return status?.repositories.first { repository in repository.worktrees.contains { $0.path == path } }
     }
 
+    var canCycleWorktrees: Bool {
+        worktreePaths.count > 1
+    }
+
     func actions(for repositoryID: UUID) -> [CustomActionDefinition] {
         customActions.filter { $0.repositoryID == repositoryID }
     }
@@ -160,6 +164,14 @@ final class AtlasAppModel: ObservableObject {
         selectedWorktreePath = worktree.path
     }
 
+    func selectAdjacentWorktree(direction: WorktreeNavigationDirection) {
+        selectedWorktreePath = WorktreeNavigation.adjacentPath(
+            in: worktreePaths,
+            from: selectedWorktreePath,
+            direction: direction
+        )
+    }
+
     func stopListeningProcess(_ process: RuntimeProcess, in worktree: WorktreeStatus) {
         let terminator = processTerminator
         Task {
@@ -208,5 +220,9 @@ final class AtlasAppModel: ObservableObject {
             return
         }
         selectedWorktreePath = paths.first
+    }
+
+    private var worktreePaths: [String] {
+        status?.repositories.flatMap(\.worktrees).map(\.path) ?? []
     }
 }

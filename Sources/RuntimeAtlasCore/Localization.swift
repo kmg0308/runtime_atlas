@@ -23,6 +23,8 @@ public struct AtlasCopy: Sendable {
     public var refreshAccessibility: String {
         value(english: "Refresh Runtime Atlas", korean: "Runtime Atlas 새로고침")
     }
+    public var nextWorktree: String { value(english: "Next Worktree", korean: "다음 워크트리") }
+    public var previousWorktree: String { value(english: "Previous Worktree", korean: "이전 워크트리") }
     public var removeRepositoryQuestion: String {
         value(english: "Remove Repository?", korean: "저장소를 제거할까요?")
     }

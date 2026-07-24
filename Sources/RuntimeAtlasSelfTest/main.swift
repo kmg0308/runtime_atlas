@@ -578,6 +578,8 @@ suite.run("Korean English localization and language setting compatibility") {
     try suite.require(korean.processLocation(pid: 42, cwd: "/tmp/example").contains("cwd"), "process location should preserve cwd as a secondary term")
     try suite.equal(english.checkForUpdates, "Check for Updates", "English update controls should be available")
     try suite.equal(korean.checkForUpdates, "업데이트 확인", "Korean update controls should be available")
+    try suite.equal(english.nextWorktree, "Next Worktree", "English worktree navigation should be available")
+    try suite.equal(korean.previousWorktree, "이전 워크트리", "Korean worktree navigation should be available")
     try suite.equal(korean.actions, "명령어", "the repository entry should use command wording")
     try suite.equal(english.actions, "Commands", "English should use command wording")
     try suite.require(korean.actionsSubtitle.contains("모든 작업 폴더"), "repository settings should explain shared definitions")
@@ -937,6 +939,35 @@ suite.run("Custom action configuration is backward compatible and atomic") {
     let removed = try store.load().value
     try suite.equal(removed.customActions, [], "removing a repository should remove its action definitions")
     try suite.equal(removed.worktreeOrderByRepository, [:], "removing a repository should remove its saved worktree order")
+}
+
+suite.run("Worktree keyboard navigation follows displayed order and wraps") {
+    let paths = ["/tmp/main", "/tmp/feature", "/tmp/review"]
+    try suite.equal(
+        WorktreeNavigation.adjacentPath(in: paths, from: "/tmp/main", direction: .next),
+        "/tmp/feature",
+        "next navigation should follow worktree order"
+    )
+    try suite.equal(
+        WorktreeNavigation.adjacentPath(in: paths, from: "/tmp/review", direction: .next),
+        "/tmp/main",
+        "next navigation should wrap to the first worktree"
+    )
+    try suite.equal(
+        WorktreeNavigation.adjacentPath(in: paths, from: "/tmp/main", direction: .previous),
+        "/tmp/review",
+        "previous navigation should wrap to the last worktree"
+    )
+    try suite.equal(
+        WorktreeNavigation.adjacentPath(in: paths, from: nil, direction: .previous),
+        "/tmp/review",
+        "previous navigation without a selection should choose the last worktree"
+    )
+    try suite.equal(
+        WorktreeNavigation.adjacentPath(in: [], from: nil, direction: .next),
+        nil,
+        "navigation without worktrees should remain empty"
+    )
 }
 
 suite.run("Command sessions persist atomically and require supervisor identity") {

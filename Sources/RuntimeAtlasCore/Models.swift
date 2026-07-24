@@ -111,6 +111,28 @@ public enum WorktreeOrderIdentity {
     }
 }
 
+public enum WorktreeNavigationDirection: Sendable {
+    case next
+    case previous
+}
+
+public enum WorktreeNavigation {
+    public static func adjacentPath(
+        in paths: [String],
+        from selectedPath: String?,
+        direction: WorktreeNavigationDirection
+    ) -> String? {
+        guard !paths.isEmpty else { return nil }
+        guard let selectedPath,
+              let selectedIndex = paths.firstIndex(of: selectedPath) else {
+            return direction == .next ? paths.first : paths.last
+        }
+
+        let offset = direction == .next ? 1 : paths.count - 1
+        return paths[(selectedIndex + offset) % paths.count]
+    }
+}
+
 public enum CustomActionKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case task
     case session
